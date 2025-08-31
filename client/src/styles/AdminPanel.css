@@ -1,0 +1,93 @@
+.admin-panel {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  padding: 1.5rem;
+  margin: 1rem 0;
+  border-radius: 15px;
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+}
+
+.admin-panel h3 {
+  margin: 0 0 1rem 0;
+  text-align: center;
+  font-size: 1.5rem;
+}
+
+.admin-controls {
+  display: flex;
+  gap: 1rem;
+  justify-content: center;
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.admin-controls button {
+  padding: 12px 20px;
+  border: none;
+  border-radius: 8px;
+  font-size: 16px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  font-weight: bold;
+}
+
+.start-game-btn {
+  background: #28a745;
+  color: white;
+}
+
+.start-game-btn:hover {
+  background: #218838;
+  transform: translateY(-2px);
+}
+
+.draw-number-btn {
+  background: #ffc107;
+  color: #000;
+}
+
+.draw-number-btn:hover {
+  background: #e0a800;
+  transform: translateY(-2px);
+}
+
+.reset-game-btn {
+  background: #dc3545;
+  color: white;
+}
+
+.reset-game-btn:hover {
+  background: #c82333;
+  transform: translateY(-2px);
+}
+
+.game-info {
+  background: rgba(255, 255, 255, 0.1);
+  padding: 1rem;
+  border-radius: 10px;
+  backdrop-filter: blur(10px);
+}
+
+.numbers-list h4 {
+  margin: 1rem 0 0.5rem 0;
+}
+
+.numbers-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  max-height: 150px;
+  overflow-y: auto;
+  padding: 0.5rem;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 8px;
+}
+
+.drawn-number {
+  background: rgba(255, 255, 255, 0.2);
+  padding: 0.3rem 0.6rem;
+  border-radius: 5px;
+  font-weight: bold;
+  min-width: 30px;
+  text-align: center;
+}
