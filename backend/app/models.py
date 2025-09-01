@@ -1,6 +1,6 @@
 from pydantic import BaseModel, Field
 from enum import Enum
-from typing import List, Optional
+from typing import List, Optional, Any
 from datetime import datetime
 
 class GameStatus(str, Enum):
@@ -13,6 +13,8 @@ class Player(BaseModel):
     name: str
     game_id: str
     score: int = 0
+    card: Optional[List[List[str]]] = None
+    marked_numbers: List[str] = []
     joined_at: datetime = Field(default_factory=datetime.now)
 
 class BingoGame(BaseModel):
@@ -21,8 +23,12 @@ class BingoGame(BaseModel):
     status: GameStatus = GameStatus.WAITING
     players: List[Player] = []
     drawn_numbers: List[str] = []
+    winner: Optional[Player] = None
+    winning_pattern: Optional[str] = None
     created_at: datetime = Field(default_factory=datetime.now)
     updated_at: datetime = Field(default_factory=datetime.now)
+    started_at: Optional[datetime] = None
+    finished_at: Optional[datetime] = None
 
 class CreateGameRequest(BaseModel):
     name: str
