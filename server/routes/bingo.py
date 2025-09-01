@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException, Query
-from server.models.bingo import BingoGame, Player
+from ..models.bingo import BingoGame, Player
 from server.database import db
 
 router = APIRouter()
