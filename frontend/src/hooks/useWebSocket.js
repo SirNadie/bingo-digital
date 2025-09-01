@@ -1,22 +1,49 @@
-import React, { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import { BingoWebSocket } from '../services/socket';
 
-const Home = ({ onGameCreated, onGameJoined }) => {
-  const [playerName, setPlayerName] = useState('');
+export const useWebSocket = (gameId) => {
+  const [socket, setSocket] = useState(null);
+  const [isConnected, setIsConnected] = useState(false);
+  const [messages, setMessages] = useState([]);
 
-  return (
-    <div style={{ padding: '2rem' }}>
-      <h2>Bienvenido al Bingo Digital</h2>
-      <input
-        type="text"
-        placeholder="Tu nombre"
-        value={playerName}
-        onChange={(e) => setPlayerName(e.target.value)}
-      />
-      <button onClick={() => onGameCreated('test-game', playerName, {})}>
-        Crear Partida de Prueba
-      </button>
-    </div>
-  );
+  useEffect(() => {
+    if (gameId) {
+      const ws = new BingoWebSocket(gameId);
+      setSocket(ws);
+      
+      // Configurar event listeners
+      ws.on('connected', () => {
+        console.log('WebSocket connected');
+        setIsConnected(true);
+      });
+
+      ws.on('disconnected', () => {
+        console.log('WebSocket disconnected');
+        setIsConnected(false);
+      });
+
+      // Conectar
+      ws.connect();
+
+      // Cleanup
+      return () => {
+        ws.disconnect();
+      };
+    }
+  }, [gameId]);
+
+  const sendMessage = useCallback((message) => {
+    if (socket && isConnected) {
+      socket.send(message);
+    }
+  }, [socket, isConnected]);
+
+  const onMessage = useCallback((messageType, handler) => {
+    if (socket) {
+      socket.on(messageType, handler);
+      return () => socket.off(messageType, handler);
+    }
+  }, [socket]);
+
+  return { socket, isConnected, sendMessage, onMessage, messages };
 };
-
-export default Home;

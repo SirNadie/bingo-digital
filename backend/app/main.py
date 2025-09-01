@@ -1,18 +1,19 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.routes import bingo, websockets 
+from app.routes import bingo, websockets
 from app.database import mongodb
+
 import os
 
 app = FastAPI(title="Bingo Digital API", version="1.0.0")
 
-# Configurar CORS
+# Configuración CORS MUY permisiva para desarrollo
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000", "http://localhost:8000"],
+    allow_origins=["*"],  # Permitir todos los origins para desarrollo
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["*"],  # Permitir todos los métodos
+    allow_headers=["*"],  # Permitir todos los headers
 )
 
 # Eventos de startup/shutdown
@@ -44,6 +45,11 @@ async def health_check():
         return {"status": "healthy", "database": "connected"}
     except Exception as e:
         return {"status": "healthy", "database": "disconnected", "error": str(e)}
+
+# Handler para opciones CORS
+@app.options("/{rest_of_path:path}")
+async def preflight_handler(rest_of_path: str):
+    return {"message": "CORS preflight"}
 
 if __name__ == "__main__":
     import uvicorn

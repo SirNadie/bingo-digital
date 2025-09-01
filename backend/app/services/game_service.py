@@ -18,21 +18,42 @@ class GameService:
         return self.db
     
     async def start_game(self, game_id: str):
+        """Iniciar un juego y comenzar el sorteo de números"""
         db = self._get_db()
         
-        # Generar cartones para todos los jugadores
+        # Primero obtener el juego actual
         game = await db.games.find_one({"game_id": game_id})
-        if game:
-            updated_players = []
-            for player in game.get("players", []):
-                player["card"] = bingo_logic.generate_bingo_card()
-                player["marked_numbers"] = []
-                updated_players.append(player)
-            
-            await db.games.update_one(
-                {"game_id": game_id},
-                {"$set": {"players": updated_players, "status": GameStatus.ACTIVE.value, "started_at": datetime.now()}}
-            )
+        if not game:
+            raise ValueError("Juego no encontrado")
+        
+        # Generar cartones para todos los jugadores
+        updated_players = []
+        for player in game.get("players", []):
+            player["card"] = bingo_logic.generate_bingo_card()
+            player["marked_numbers"] = []
+            updated_players.append(player)
+        
+        # Actualizar el juego con los cartones y cambiar estado
+        result = await db.games.update_one(
+            {"game_id": game_id},
+            {"$set": {
+                "players": updated_players,
+                "status": GameStatus.ACTIVE.value, 
+                "started_at": datetime.now(),
+                "drawn_numbers": []  # Reiniciar números sorteados
+            }}
+        )
+        
+        if result.modified_count == 0:
+            raise ValueError("Error al actualizar el juego")
+        
+        # Notificar que el juego comenzó
+        await notification_service.notify_game_started(game_id)
+        
+        # Iniciar el sorteo de números en segundo plano
+        self.active_games[game_id] = asyncio.create_task(
+            self._number_draw_loop(game_id)
+        )
         
         await notification_service.notify_game_started(game_id)
         self.active_games[game_id] = asyncio.create_task(self._number_draw_loop(game_id))

@@ -35,4 +35,20 @@ function App() {
       {currentView === 'home' && (
         <Home 
           onGameCreated={handleGameCreated}
-          onGameJoined=
+          onGameJoined={handleGameJoined}
+        />
+      )}
+      
+      {currentView === 'game' && (
+        <GameBoard 
+          gameId={gameId}
+          playerName={playerName}
+          playerId={playerId}
+          onLeaveGame={handleLeaveGame}
+        />
+      )}
+    </div>
+  );
+}
+
+export default App;
