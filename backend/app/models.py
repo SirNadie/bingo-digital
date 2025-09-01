@@ -98,7 +98,6 @@ class CreateGameRequest(BaseModel):
 
 class JoinGameRequest(BaseModel):
     game_id: str
-    user_id: str  # Ahora requiere user_id en lugar de player_name
     cartons_count: int = Field(1, ge=1, le=5)  # 1-5 cartones
 
 class StartGameRequest(BaseModel):

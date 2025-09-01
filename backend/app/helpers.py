@@ -1,6 +1,9 @@
 from datetime import datetime
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 import random
+import re
+from bson import ObjectId  # ← AÑADIR esta importación
+import json
 
 def generate_otp_code(length: int = 6) -> str:
     """Generar código OTP numérico"""
@@ -8,7 +11,6 @@ def generate_otp_code(length: int = 6) -> str:
 
 def validate_phone_number(phone: str) -> bool:
     """Validar formato de número de teléfono"""
-    import re
     # Validación internacional básica
     pattern = r'^\+?[1-9]\d{7,14}$'
     return bool(re.match(pattern, phone.replace(" ", "")))
@@ -41,3 +43,35 @@ def get_time_ago(timestamp: datetime) -> str:
         return f"hace {minutes} minuto{'s' if minutes > 1 else ''}"
     else:
         return "hace unos segundos"
+
+# Approach alternativo sin depender de bson
+def convert_objectid(data: Any) -> Any:
+    """
+    Recursively convert ObjectId-like objects to string
+    """
+    if isinstance(data, list):
+        return [convert_objectid(item) for item in data]
+    elif isinstance(data, dict):
+        return {key: convert_objectid(value) for key, value in data.items()}
+    elif hasattr(data, '__class__') and 'ObjectId' in str(data.__class__):
+        # Detectar ObjectId por el nombre de clase
+        return str(data)
+    elif isinstance(data, datetime):
+        return data.isoformat()
+    else:
+        return data
+
+def serialize_mongo_document(doc: Dict) -> Dict:
+    """
+    Serialize MongoDB document for JSON response
+    """
+    if doc is None:
+        return None
+    
+    # Convert ObjectId and other non-serializable types
+    serialized = convert_objectid(doc)
+    
+    # Remove MongoDB internal fields if desired
+    serialized.pop('_id', None)
+    
+    return serialized

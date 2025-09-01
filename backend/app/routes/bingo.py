@@ -61,8 +61,8 @@ async def create_game(
 
 @router.post("/join")
 async def join_game(
-    join_data: JoinGameRequest,
-    current_user: User = Depends(get_current_user)  # ← AÑADIR dependencia
+    join_data: JoinGameRequest,  # ← Ahora solo tiene game_id y cartons_count
+    current_user: User = Depends(get_current_user)  # ← user_id viene del token
 ):
     try:
         db = get_database()
@@ -112,7 +112,8 @@ async def join_game(
             "marked_numbers": [],
             "continue_playing": False,
             "patterns_won": [],
-            "joined_at": datetime.now()
+            "joined_at": datetime.now(),
+            "cartons_count": cartons_count  # ← Guardar cuántos cartones compró
         }
         
         # Añadir jugador al juego
@@ -169,30 +170,44 @@ async def get_game(game_id: str):
 @router.post("/start")
 async def start_game(
     start_data: StartGameRequest,
-    current_user: User = Depends(get_current_user)  # ← AÑADIR dependencia
+    current_user: User = Depends(get_current_user)
 ):
     try:
+        print(f"🎯 Intentando iniciar juego: {start_data.game_id}")
+        print(f"   Usuario: {current_user.user_id}")
+        
         db = get_database()
         
         # Verificar que el juego existe
         game = await db.games.find_one({"game_id": start_data.game_id})
         if not game:
+            print("❌ Juego no encontrado")
             raise HTTPException(status_code=404, detail="Juego no encontrado")
+        
+        print(f"   Juego encontrado: {game.get('name')}")
+        print(f"   Estado actual: {game.get('status')}")
+        print(f"   Creador: {game.get('created_by')}")
         
         # Verificar que el usuario es el creador del juego
         if game.get("created_by") != current_user.user_id:
+            print("❌ Usuario no es el creador")
             raise HTTPException(status_code=403, detail="Solo el creador puede iniciar el juego")
         
         # Verificar que el juego está en estado waiting
         if game.get("status") != GameStatus.WAITING.value:
+            print("❌ Juego ya no está en estado waiting")
             raise HTTPException(status_code=400, detail="El juego ya ha comenzado o terminado")
         
         # Verificar que hay al menos 2 jugadores
         players = game.get("players", [])
+        print(f"   Jugadores encontrados: {len(players)}")
+        
         if len(players) < 2:
+            print("❌ No hay suficientes jugadores")
             raise HTTPException(status_code=400, detail="Se necesitan al menos 2 jugadores para comenzar")
         
         # Iniciar el juego
+        print("🚀 Iniciando juego...")
         await game_service.start_game(start_data.game_id)
         
         return {
@@ -201,11 +216,13 @@ async def start_game(
             "players_count": len(players)
         }
         
-    except HTTPException:
+    except HTTPException as he:
+        print(f"❌ HTTPException: {he.detail}")
         raise
     except Exception as e:
+        print(f"❌ Error inesperado: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error iniciando juego: {str(e)}")
-
+    
 @router.post("/{game_id}/stop")
 async def stop_game(
     game_id: str,

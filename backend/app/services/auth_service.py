@@ -2,7 +2,7 @@ import random
 from datetime import datetime, timedelta
 from typing import Dict, Optional, Tuple
 import jwt
-from ..database import get_database
+from ..database import get_database, mongodb  # ← AÑADIR mongodb
 from ..models import User, UserRole
 from ..utils.helpers import generate_otp_code, validate_phone_number
 import os
@@ -12,10 +12,16 @@ load_dotenv()
 
 class AuthService:
     def __init__(self):
-        self.db = get_database()
-        self.otp_storage: Dict[str, Dict] = {}  # {phone: {code: str, expires: datetime, attempts: int}}
+        self.db = None  # ← Inicializar como None
+        self.otp_storage: Dict[str, Dict] = {}
         self.jwt_secret = os.getenv("JWT_SECRET", "bingo_dev_secret_2024")
         self.jwt_algorithm = "HS256"
+    
+    async def _get_db(self):
+        """Obtener la base de datos de forma lazy"""
+        if self.db is None:
+            self.db = get_database()
+        return self.db
     
     async def request_otp(self, phone: str) -> Tuple[bool, str]:
         """Solicitar código OTP para un teléfono"""
@@ -75,20 +81,23 @@ class AuthService:
             # Código válido - limpiar OTP
             del self.otp_storage[phone]
             
+            # Obtener base de datos
+            db = await self._get_db()  # ← USAR método lazy
+            
             # Buscar o crear usuario
-            user_data = await self.db.users.find_one({"phone": phone})
+            user_data = await db.users.find_one({"phone": phone})
             
             if user_data:
                 # Usuario existente - actualizar último login
                 user = User(**user_data)
-                await self.db.users.update_one(
+                await db.users.update_one(
                     {"phone": phone},
                     {"$set": {"last_login": datetime.now()}}
                 )
             else:
                 # Nuevo usuario - crear registro
                 user = User(phone=phone)
-                await self.db.users.insert_one(user.dict())
+                await db.users.insert_one(user.dict())
             
             return True, user, "Verificación exitosa"
             
@@ -102,7 +111,7 @@ class AuthService:
             "user_id": user.user_id,
             "phone": user.phone,
             "role": user.role.value,
-            "exp": datetime.now() + timedelta(days=30)  # Expira en 30 días
+            "exp": datetime.now() + timedelta(days=30)
         }
         
         return jwt.encode(payload, self.jwt_secret, algorithm=self.jwt_algorithm)
@@ -120,7 +129,8 @@ class AuthService:
     async def get_user_by_id(self, user_id: str) -> Optional[User]:
         """Obtener usuario por ID"""
         try:
-            user_data = await self.db.users.find_one({"user_id": user_id})
+            db = await self._get_db()  # ← USAR método lazy
+            user_data = await db.users.find_one({"user_id": user_id})
             if user_data:
                 return User(**user_data)
             return None

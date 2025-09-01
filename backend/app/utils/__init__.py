@@ -4,7 +4,9 @@ from .helpers import (
     calculate_payout,
     can_afford_game,
     format_credits,
-    get_time_ago
+    get_time_ago,
+    convert_objectid,
+    serialize_mongo_document
 )
 
 __all__ = [
@@ -13,5 +15,7 @@ __all__ = [
     'calculate_payout',
     'can_afford_game',
     'format_credits',
-    'get_time_ago'
+    'get_time_ago',
+    'convert_objectid',
+    'serialize_mongo_document'
 ]
