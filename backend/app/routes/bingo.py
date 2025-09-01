@@ -1,6 +1,8 @@
 from fastapi import APIRouter, HTTPException
 from app.database import get_database
-from app.models import GameStatus, CreateGameRequest, JoinGameRequest
+from app.models import GameStatus, CreateGameRequest, JoinGameRequest,StartGameRequest
+from app.services.notification import notification_service
+from app.services.game_service import game_service
 from bson import ObjectId
 from datetime import datetime
 import random
@@ -13,6 +15,7 @@ def convert_objectid(doc):
         doc['_id'] = str(doc['_id'])
     return doc
 
+# Endpoints
 @router.post("/create")
 async def create_game(game_data: CreateGameRequest):
     try:
@@ -104,3 +107,42 @@ async def get_game(game_id: str):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error getting game: {str(e)}")
+    
+@router.post("/start")
+async def start_game(start_data: StartGameRequest):
+    try:
+        db = get_database()
+        
+        # Verificar que el juego existe
+        game = await db.games.find_one({"game_id": start_data.game_id})
+        if not game:
+            raise HTTPException(status_code=404, detail="Juego no encontrado")
+        
+        # Verificar que el juego está en estado waiting
+        if game.get("status") != GameStatus.WAITING.value:
+            raise HTTPException(status_code=400, detail="El juego ya ha comenzado o terminado")
+        
+        # Verificar que hay al menos 2 jugadores
+        if len(game.get("players", [])) < 2:
+            raise HTTPException(status_code=400, detail="Se necesitan al menos 2 jugadores para comenzar")
+        
+        # Iniciar el juego
+        await game_service.start_game(start_data.game_id)
+        
+        return {
+            "message": "Juego iniciado exitosamente",
+            "game_id": start_data.game_id
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error iniciando juego: {str(e)}")
+    
+@router.post("/{game_id}/stop")
+async def stop_game(game_id: str):
+    try:
+        await game_service.stop_game(game_id)
+        return {"message": "Juego detenido exitosamente", "game_id": game_id}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error deteniendo juego: {str(e)}")
