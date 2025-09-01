@@ -1,19 +1,19 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.routes import bingo, websockets
+from app.routes import bingo, websockets, auth
 from app.database import mongodb
 
 import os
 
 app = FastAPI(title="Bingo Digital API", version="1.0.0")
 
-# Configuración CORS MUY permisiva para desarrollo
+# Configurar CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Permitir todos los origins para desarrollo
+    allow_origins=["*"],  # Permite todos los origins para desarrollo
     allow_credentials=True,
-    allow_methods=["*"],  # Permitir todos los métodos
-    allow_headers=["*"],  # Permitir todos los headers
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # Eventos de startup/shutdown
@@ -30,6 +30,7 @@ async def shutdown_event():
 # Incluir routers
 app.include_router(bingo.router, prefix="/api/bingo")
 app.include_router(websockets.router, prefix="/ws")
+app.include_router(auth.router, prefix="/auth")
 
 @app.get("/")
 def read_root():
@@ -37,19 +38,12 @@ def read_root():
 
 @app.get("/health")
 async def health_check():
-    # Verificar si la base de datos está conectada
     try:
         db = mongodb.get_database()
-        # Hacer un ping para verificar la conexión
         await db.command('ping')
         return {"status": "healthy", "database": "connected"}
     except Exception as e:
         return {"status": "healthy", "database": "disconnected", "error": str(e)}
-
-# Handler para opciones CORS
-@app.options("/{rest_of_path:path}")
-async def preflight_handler(rest_of_path: str):
-    return {"message": "CORS preflight"}
 
 if __name__ == "__main__":
     import uvicorn
