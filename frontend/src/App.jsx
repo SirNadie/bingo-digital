@@ -1,53 +1,64 @@
-import React, { useState } from 'react';
-import Home from './components/Home';
-import GameBoard from './components/GameBoard';
-import './index.css';
+import React from 'react';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { AuthProvider, useAuth } from './context/AuthContext';
+import Login from './components/Auth/Login';
+import VerifyOTP from './components/Auth/VerifyOTP';
+import Dashboard from './components/Dashboard/Dashboard';
+import LoadingSpinner from './components/Layout/LoadingSpinner';
+import './App.css';
+
+// Componente para rutas protegidas
+const ProtectedRoute = ({ children }) => {
+  const { user, loading } = useAuth();
+  
+  if (loading) {
+    return <LoadingSpinner />;
+  }
+  
+  return user ? children : <Navigate to="/login" />;
+};
+
+// Componente para rutas de admin
+const AdminRoute = ({ children }) => {
+  const { user, loading } = useAuth();
+  
+  if (loading) {
+    return <LoadingSpinner />;
+  }
+  
+  return user && user.role === 'admin' ? children : <Navigate to="/dashboard" />;
+};
 
 function App() {
-  const [currentView, setCurrentView] = useState('home');
-  const [gameId, setGameId] = useState('');
-  const [playerName, setPlayerName] = useState('');
-  const [playerId, setPlayerId] = useState('');
-
-  const handleGameCreated = (newGameId, newPlayerName, gameData) => {
-    setGameId(newGameId);
-    setPlayerName(newPlayerName);
-    setPlayerId(gameData.players.find(p => p.name === newPlayerName)?.player_id || '');
-    setCurrentView('game');
-  };
-
-  const handleGameJoined = (joinedGameId, joinedPlayerName, result) => {
-    setGameId(joinedGameId);
-    setPlayerName(joinedPlayerName);
-    setPlayerId(result.player_id);
-    setCurrentView('game');
-  };
-
-  const handleLeaveGame = () => {
-    setCurrentView('home');
-    setGameId('');
-    setPlayerName('');
-    setPlayerId('');
-  };
-
   return (
-    <div className="app">
-      {currentView === 'home' && (
-        <Home 
-          onGameCreated={handleGameCreated}
-          onGameJoined={handleGameJoined}
-        />
-      )}
-      
-      {currentView === 'game' && (
-        <GameBoard 
-          gameId={gameId}
-          playerName={playerName}
-          playerId={playerId}
-          onLeaveGame={handleLeaveGame}
-        />
-      )}
-    </div>
+    <AuthProvider>
+      <BrowserRouter>
+        <div className="app">
+          <Routes>
+            {/* Rutas públicas */}
+            <Route path="/login" element={<Login />} />
+            <Route path="/verify" element={<VerifyOTP />} />
+            
+            {/* Rutas protegidas */}
+            <Route path="/dashboard" element={
+              <ProtectedRoute>
+                <Dashboard />
+              </ProtectedRoute>
+            } />
+            
+            {/* Rutas de admin */}
+            <Route path="/admin" element={
+              <AdminRoute>
+                <div>Panel Admin (próximamente)</div>
+              </AdminRoute>
+            } />
+            
+            {/* Ruta por defecto */}
+            <Route path="/" element={<Navigate to="/dashboard" />} />
+          </Routes>
+        </div>
+      </BrowserRouter>
+    </AuthProvider>
   );
 }
 

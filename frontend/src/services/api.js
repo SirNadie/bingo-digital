@@ -1,114 +1,76 @@
 import axios from 'axios';
 
-const API_BASE_URL = 'http://localhost:8000/api';
+const API_BASE = 'http://localhost:8000';
 
-// Crear instancia de axios con configuración básica
+// Configurar axios base
 const api = axios.create({
-  baseURL: API_BASE_URL,
+  baseURL: API_BASE,
   headers: {
     'Content-Type': 'application/json',
   },
 });
 
-// Interceptor para requests
-api.interceptors.request.use(
-  (config) => {
-    console.log('Enviando request:', config.method?.toUpperCase(), config.url);
-    return config;
-  },
+// Interceptor para agregar token automáticamente
+api.interceptors.request.use((config) => {
+  const token = localStorage.getItem('bingo_token');
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
+
+// Interceptor para manejar errores
+api.interceptors.response.use(
+  (response) => response,
   (error) => {
-    console.error('Error en request:', error);
+    if (error.response?.status === 401) {
+      localStorage.removeItem('bingo_token');
+      window.location.href = '/login';
+    }
     return Promise.reject(error);
   }
 );
 
-// Interceptor para responses
-api.interceptors.response.use(
-  (response) => {
-    console.log('Response recibido:', response.status, response.data);
-    return response;
-  },
-  (error) => {
-    console.error('Error en response:', error);
-    
-    // Si es error de CORS o red
-    if (error.code === 'ERR_NETWORK') {
-      throw new Error('No se pudo conectar con el servidor. Verifica que el backend esté ejecutándose.');
-    }
-    
-    // Si el backend respondió con error
-    if (error.response) {
-      const message = error.response.data?.detail || error.response.data?.message || 'Error del servidor';
-      throw new Error(message);
-    }
-    
-    throw new Error('Error de conexión desconocido');
-  }
-);
+export const authAPI = {
+  login: (phone) => api.post('/auth/login', { phone }),
+  verify: (phone, code) => api.post('/auth/verify', { phone, code }),
+  getProfile: () => api.get('/auth/me'),
+  logout: () => api.post('/auth/logout'),
+};
 
-export const bingoApi = {
-  createGame: async (gameName) => {
-    try {
-      const response = await api.post('/bingo/create', { name: gameName });
-      return response.data;
-    } catch (error) {
-      console.error('Error creating game:', error);
-      throw error;
-    }
-  },
+export const userAPI = {
+  deposit: (amount, paymentMethod) => 
+    api.post('/user/deposit', { amount, payment_method: paymentMethod }),
+  withdraw: (amount) => api.post('/user/withdraw', { amount }),
+  getTransactions: () => api.get('/user/transactions'),
+  getProfile: () => api.get('/user/profile'),
+};
 
-  joinGame: async (gameId, playerName) => {
-    try {
-      const response = await api.post('/bingo/join', { 
-        game_id: gameId, 
-        player_name: playerName 
-      });
-      return response.data;
-    } catch (error) {
-      console.error('Error joining game:', error);
-      throw error;
-    }
-  },
+export const gameAPI = {
+  create: (name, entryCost) => 
+    api.post('/api/bingo/create', { name, entry_cost: entryCost }),
+  list: () => api.get('/api/bingo/list'),
+  join: (gameId, cartonsCount) => 
+    api.post('/api/bingo/join', { game_id: gameId, cartons_count: cartonsCount }),
+  start: (gameId) => api.post('/api/bingo/start', { game_id: gameId }),
+  getGame: (gameId) => api.get(`/api/bingo/${gameId}`),
+};
 
-  listGames: async () => {
-    try {
-      const response = await api.get('/bingo/list');
-      return response.data;
-    } catch (error) {
-      console.error('Error listing games:', error);
-      throw error;
-    }
+export const adminAPI = {
+  getStats: () => api.get('/admin/stats'),
+  getUsers: (limit = 100, skip = 0) => 
+    api.get(`/admin/users?limit=${limit}&skip=${skip}`),
+  getTransactions: (status, limit = 50, skip = 0) => {
+    const params = new URLSearchParams();
+    if (status) params.append('status', status);
+    params.append('limit', limit);
+    params.append('skip', skip);
+    return api.get(`/admin/transactions?${params}`);
   },
-
-  getGame: async (gameId) => {
-    try {
-      const response = await api.get(`/bingo/${gameId}`);
-      return response.data;
-    } catch (error) {
-      console.error('Error getting game:', error);
-      throw error;
-    }
-  },
-
-  startGame: async (gameId) => {
-    try {
-      const response = await api.post('/bingo/start', { game_id: gameId });
-      return response.data;
-    } catch (error) {
-      console.error('Error starting game:', error);
-      throw error;
-    }
-  },
-
-  stopGame: async (gameId) => {
-    try {
-      const response = await api.post(`/bingo/${gameId}/stop`);
-      return response.data;
-    } catch (error) {
-      console.error('Error stopping game:', error);
-      throw error;
-    }
-  },
+  approveWithdrawal: (transactionId, notes = '') => 
+    api.post(`/admin/transactions/${transactionId}/approve`, { admin_notes: notes }),
+  adjustCredits: (userId, amount, reason) => 
+    api.post('/admin/adjust-credits', { user_id: userId, amount, reason }),
 };
 
 export default api;
