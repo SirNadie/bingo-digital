@@ -26,7 +26,7 @@ def register(payload: LoginRequest, session: Session = Depends(get_session)):
     w = Wallet(user_id=u.id, balance=0.0)
     session.add(w)
     session.commit()
-    token = create_access_token(subject=u.id)
+    token = create_access_token(subject=u.id, extra={"is_admin": u.is_admin})
     return LoginResponse(access_token=token)
 
 
@@ -44,7 +44,14 @@ def me(user_id: str = Depends(_auth), session: Session = Depends(get_session)):
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
     w = session.exec(select(Wallet).where(Wallet.user_id == user_id)).first()
     balance = w.balance if w else 0.0
-    return MeResponse(id=u.id, email=u.email, balance=balance, alias=u.alias, is_verified=u.is_verified)
+    return MeResponse(
+        id=u.id,
+        email=u.email,
+        balance=balance,
+        alias=u.alias,
+        is_verified=u.is_verified,
+        is_admin=u.is_admin,
+    )
 
 
 @router.patch("/me", response_model=MeResponse)
@@ -58,7 +65,14 @@ def update_me(payload: UpdateProfileRequest, user_id: str = Depends(_auth), sess
     session.commit()
     w = session.exec(select(Wallet).where(Wallet.user_id == user_id)).first()
     bal = w.balance if w else 0.0
-    return MeResponse(id=u.id, email=u.email, balance=bal, alias=u.alias, is_verified=u.is_verified)
+    return MeResponse(
+        id=u.id,
+        email=u.email,
+        balance=bal,
+        alias=u.alias,
+        is_verified=u.is_verified,
+        is_admin=u.is_admin,
+    )
 
 
 @router.post("/login", response_model=LoginResponse)
@@ -79,5 +93,5 @@ def login(payload: LoginRequest, session: Session = Depends(get_session)):
     else:
         if not verify_password(payload.password, u.hashed_password):
             raise HTTPException(status_code=401, detail="Credenciales inválidas")
-    token = create_access_token(subject=u.id)
+    token = create_access_token(subject=u.id, extra={"is_admin": u.is_admin})
     return LoginResponse(access_token=token)

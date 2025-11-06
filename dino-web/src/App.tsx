@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import api from "./api/http";
 
 type Game = {
@@ -17,23 +17,869 @@ type Ticket = {
   numbers: number[][];
 };
 
-  type Me = { id: string; email: string; balance: number; alias?: string };
+type Me = { id: string; email: string; balance: number; alias?: string; is_admin: boolean; is_verified: boolean };
 
-  type GameState = {
-    id: string;
-    status: string;
-    price: number;
-    min_tickets: number;
-    sold_tickets: number;
-    drawn_numbers: number[];
-    paid_diagonal: boolean;
-    paid_line: boolean;
-    paid_bingo: boolean;
+type GameState = {
+  id: string;
+  status: string;
+  price: number;
+  min_tickets: number;
+  sold_tickets: number;
+  drawn_numbers: number[];
+  paid_diagonal: boolean;
+  paid_line: boolean;
+  paid_bingo: boolean;
+};
+
+type AdminTransaction = {
+  id: string;
+  user: string;
+  timestamp: string;
+  amount: number;
+  type: "deposit" | "withdraw";
+  status: "pending" | "approved" | "rejected";
+};
+
+type AdminView = "dashboard" | "transactions";
+
+type AdminDashboardProps = {
+  me: Me;
+  onLogout: () => void;
+  transactions: AdminTransaction[];
+};
+
+type AdminNavItem = { icon: string; label: string; view?: AdminView };
+type AdminSupportItem = { icon: string; label: string; action?: "logout" };
+
+const ADMIN_NAV_ITEMS: AdminNavItem[] = [
+  { icon: "dashboard", label: "Dashboard", view: "dashboard" },
+  { icon: "group", label: "Gestión de Usuarios" },
+  { icon: "stadia_controller", label: "Gestión de Partidas" },
+  { icon: "account_balance_wallet", label: "Transacciones", view: "transactions" },
+];
+
+const ADMIN_SUPPORT_ITEMS: AdminSupportItem[] = [
+  { icon: "settings", label: "Configuración" },
+  { icon: "help", label: "Ayuda" },
+  { icon: "logout", label: "Cerrar sesión", action: "logout" },
+];
+
+const ADMIN_SAMPLE_TRANSACTIONS: AdminTransaction[] = [
+  {
+    id: "TXN12345",
+    user: "juan.perez",
+    timestamp: "15/07/2024 10:30",
+    amount: 50,
+    type: "deposit",
+    status: "pending",
+  },
+  {
+    id: "TXN12346",
+    user: "maria.gomez",
+    timestamp: "15/07/2024 09:45",
+    amount: 20,
+    type: "withdraw",
+    status: "pending",
+  },
+  {
+    id: "TXN12347",
+    user: "carlos.lopez",
+    timestamp: "14/07/2024 22:15",
+    amount: 100,
+    type: "deposit",
+    status: "pending",
+  },
+  {
+    id: "TXN12348",
+    user: "ana.martinez",
+    timestamp: "14/07/2024 18:00",
+    amount: 75,
+    type: "withdraw",
+    status: "pending",
+  },
+];
+
+type UserTransactionType = "deposit" | "withdraw" | "purchase" | "prize";
+
+type UserTransaction = {
+  id: string;
+  timestamp: string;
+  type: UserTransactionType;
+  description: string;
+  amount: number;
+};
+
+type UserDashboardProps = {
+  me: Me;
+  onLogout: () => void;
+  onTopup: (amount: number) => Promise<void>;
+  onWithdraw: () => void;
+  isProcessingTopup: boolean;
+  transactions: UserTransaction[];
+  message: string;
+  error: string;
+};
+
+const USER_SAMPLE_TRANSACTIONS: UserTransaction[] = [
+  {
+    id: "TXU-001",
+    timestamp: "2024-07-15T10:30:00Z",
+    type: "deposit",
+    description: "Depósito con tarjeta (final 4242)",
+    amount: 500,
+  },
+  {
+    id: "TXU-002",
+    timestamp: "2024-07-14T18:45:00Z",
+    type: "purchase",
+    description: "Compra de 5 cartones · Partida #AB12CD",
+    amount: -50,
+  },
+  {
+    id: "TXU-003",
+    timestamp: "2024-07-13T21:12:00Z",
+    type: "prize",
+    description: "Premio Bingo · Sala \"Noche Retro\"",
+    amount: 150,
+  },
+  {
+    id: "TXU-004",
+    timestamp: "2024-07-12T11:05:00Z",
+    type: "withdraw",
+    description: "Retiro a cuenta bancaria",
+    amount: -200,
+  },
+  {
+    id: "TXU-005",
+    timestamp: "2024-07-10T15:20:00Z",
+    type: "purchase",
+    description: "Compra de 10 cartones · Partida #XY98ZT",
+    amount: -100,
+  },
+];
+
+function AdminDashboard({ me, onLogout, transactions }: AdminDashboardProps) {
+  const [view, setView] = useState<AdminView>("dashboard");
+  const [isSidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [search, setSearch] = useState("");
+  const [selectedTransactions, setSelectedTransactions] = useState<string[]>([]);
+  const selectAllRef = useRef<HTMLInputElement | null>(null);
+
+  const filteredTransactions = useMemo(() => {
+    if (!search.trim()) return transactions;
+    const term = search.trim().toLowerCase();
+    return transactions.filter(
+      (txn) =>
+        txn.id.toLowerCase().includes(term) ||
+        txn.user.toLowerCase().includes(term) ||
+        txn.timestamp.toLowerCase().includes(term),
+    );
+  }, [transactions, search]);
+
+  const totalTransactions = transactions.length;
+  const pendingCount = transactions.filter((txn) => txn.status === "pending").length;
+  const allSelected = filteredTransactions.length > 0 && selectedTransactions.length === filteredTransactions.length;
+  const indeterminate = selectedTransactions.length > 0 && !allSelected;
+
+  useEffect(() => {
+    if (selectAllRef.current) {
+      selectAllRef.current.indeterminate = indeterminate;
+    }
+  }, [indeterminate]);
+
+  useEffect(() => {
+    setSelectedTransactions([]);
+    if (view !== "transactions") {
+      setSearch("");
+    }
+    if (selectAllRef.current) {
+      selectAllRef.current.indeterminate = false;
+    }
+  }, [view]);
+
+  const handleToggleAll = () => {
+    if (allSelected) {
+      setSelectedTransactions([]);
+    } else {
+      setSelectedTransactions(filteredTransactions.map((txn) => txn.id));
+    }
   };
 
+  const handleToggleRow = (id: string) => {
+    setSelectedTransactions((prev) => (prev.includes(id) ? prev.filter((tx) => tx !== id) : [...prev, id]));
+  };
+
+  const handleLogout = () => {
+    setView("dashboard");
+    onLogout();
+  };
+
+  const layoutClassName = isSidebarCollapsed ? "admin-layout admin-layout--collapsed" : "admin-layout";
+
+  return (
+    <div className={layoutClassName}>
+      <aside className="admin-sidebar">
+        <div className="admin-sidebar__header">
+          <div className="admin-sidebar__identity">
+            <div className="admin-avatar" aria-hidden="true" />
+            <div>
+              <h1 className="admin-sidebar__title">Admin Bingo</h1>
+              <p className="admin-sidebar__subtitle">Panel de Administración</p>
+            </div>
+          </div>
+          <button
+            type="button"
+            className="admin-sidebar__toggle"
+            onClick={() => setSidebarCollapsed((prev) => !prev)}
+            aria-label={isSidebarCollapsed ? "Expandir menú lateral" : "Colapsar menú lateral"}
+          >
+            <span className="material-symbols-outlined" aria-hidden="true">
+              {isSidebarCollapsed ? "chevron_right" : "chevron_left"}
+            </span>
+          </button>
+        </div>
+        <nav className="admin-sidebar__nav">
+          {ADMIN_NAV_ITEMS.map((item) => {
+            const targetView = item.view;
+            return (
+              <button
+                key={item.label}
+                type="button"
+                className={`admin-sidebar__link ${targetView && view === targetView ? "admin-sidebar__link--active" : ""}`}
+                onClick={targetView ? () => setView(targetView) : undefined}
+                aria-pressed={targetView ? view === targetView : undefined}
+                aria-label={item.label}
+              >
+                <span
+                  className="material-symbols-outlined"
+                  style={targetView && view === targetView ? { fontVariationSettings: "'FILL' 1" } : undefined}
+                  aria-hidden="true"
+                >
+                  {item.icon}
+                </span>
+                <span className="admin-sidebar__label">{item.label}</span>
+              </button>
+            );
+          })}
+        </nav>
+        <div className="admin-sidebar__footer">
+          {ADMIN_SUPPORT_ITEMS.map((item) => (
+            <button
+              key={item.label}
+              type="button"
+              className="admin-sidebar__link"
+              onClick={item.action === "logout" ? handleLogout : undefined}
+            >
+              <span className="material-symbols-outlined" aria-hidden="true">
+                {item.icon}
+              </span>
+              <span>{item.label}</span>
+            </button>
+          ))}
+        </div>
+      </aside>
+
+      <main className="admin-dashboard">
+        <div className="admin-dashboard__inner">
+          {view === "dashboard" ? (
+            <>
+              <section className="admin-chipbar" aria-label="Filtros temporales">
+                <button type="button" className="admin-chip admin-chip--active">Ultimas 24h</button>
+                <button type="button" className="admin-chip">Últimos 7 días</button>
+                <button type="button" className="admin-chip">Últimos 30 días</button>
+                <button type="button" className="admin-chip admin-chip--icon">
+                  <span>Rango personalizado</span>
+                  <span className="material-symbols-outlined" aria-hidden="true">calendar_month</span>
+                </button>
+              </section>
+
+              <section className="admin-metrics">
+                <article className="admin-card admin-card--metric">
+                  <header>
+                    <span className="material-symbols-outlined" aria-hidden="true">group</span>
+                    <p>Usuarios totales</p>
+                  </header>
+                  <strong>12,456</strong>
+                  <span className="admin-metric__trend admin-metric__trend--up">+2.5%</span>
+                </article>
+                <article className="admin-card admin-card--metric">
+                  <header>
+                    <span className="material-symbols-outlined" aria-hidden="true">casino</span>
+                    <p>Partidas activas</p>
+                  </header>
+                  <strong>87</strong>
+                  <span className="admin-metric__trend admin-metric__trend--up">+5.1%</span>
+                </article>
+                <article className="admin-card admin-card--metric">
+                  <header>
+                    <span className="material-symbols-outlined" aria-hidden="true">payments</span>
+                    <p>Ingresos totales</p>
+                  </header>
+                  <strong>$98,230</strong>
+                  <span className="admin-metric__trend admin-metric__trend--up">+10.2%</span>
+                </article>
+                <article className="admin-card admin-card--metric">
+                  <header>
+                    <span className="material-symbols-outlined" aria-hidden="true">account_balance_wallet</span>
+                    <p>Movimientos hoy</p>
+                  </header>
+                  <strong>{totalTransactions}</strong>
+                  <span className="admin-metric__trend admin-metric__trend--neutral">Resumen</span>
+                </article>
+              </section>
+
+              <section className="admin-grid">
+                <article className="admin-card admin-card--chart">
+                  <header>
+                    <p className="admin-card__title">Ingresos plataforma (30 días)</p>
+                    <div className="admin-card__summary">
+                      <strong>$45,890</strong>
+                      <span className="admin-metric__trend admin-metric__trend--up">+12.5%</span>
+                    </div>
+                  </header>
+                  <p className="admin-card__caption">Comparativa semanal</p>
+                  <div className="admin-chart admin-chart--line" aria-hidden="true">
+                    <svg viewBox="-3 0 478 150" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Evolución de ingresos">
+                      <defs>
+                        <linearGradient id="revenueGradient" x1="236" x2="236" y1="1" y2="149" gradientUnits="userSpaceOnUse">
+                          <stop stopColor="#13ec5b" stopOpacity="0.3" />
+                          <stop offset="1" stopColor="#13ec5b" stopOpacity="0" />
+                        </linearGradient>
+                      </defs>
+                      <path d="M0 109C18.1538 109 18.1538 21 36.3077 21C54.4615 21 54.4615 41 72.6154 41C90.7692 41 90.7692 93 108.923 93C127.077 93 127.077 33 145.231 33C163.385 33 163.385 101 181.538 101C199.692 101 199.692 61 217.846 61C236 61 236 45 254.154 45C272.308 45 272.308 121 290.462 121C308.615 121 308.615 149 326.769 149C344.923 149 344.923 1 363.077 1C381.231 1 381.231 81 399.385 81C417.538 81 417.538 129 435.692 129C453.846 129 453.846 25 472 25V149H326.769H0V109Z" fill="url(#revenueGradient)" />
+                      <path
+                        d="M0 109C18.1538 109 18.1538 21 36.3077 21C54.4615 21 54.4615 41 72.6154 41C90.7692 41 90.7692 93 108.923 93C127.077 93 127.077 33 145.231 33C163.385 33 163.385 101 181.538 101C199.692 101 199.692 61 217.846 61C236 61 236 45 254.154 45C272.308 45 272.308 121 290.462 121C308.615 121 308.615 149 326.769 149C344.923 149 344.923 1 363.077 1C381.231 1 381.231 81 399.385 81C417.538 81 417.538 129 435.692 129C453.846 129 453.846 25 472 25"
+                        strokeWidth={3}
+                        stroke="currentColor"
+                        className="admin-chart__line"
+                        strokeLinecap="round"
+                      />
+                    </svg>
+                  </div>
+                  <ul className="admin-chart__ticks">
+                    <li>Semana 1</li>
+                    <li>Semana 2</li>
+                    <li>Semana 3</li>
+                    <li>Semana 4</li>
+                  </ul>
+                </article>
+
+                <article className="admin-card admin-card--donut">
+                  <header>
+                    <p className="admin-card__title">Packs de créditos populares</p>
+                  </header>
+                  <div className="admin-donut">
+                    <svg viewBox="0 0 36 36" role="img" aria-label="Distribución de ventas de créditos">
+                      <path
+                        className="admin-donut__track"
+                        d="M18 2.0845a15.9155 15.9155 0 0 1 0 31.831 15.9155 15.9155 0 0 1 0-31.831"
+                        fill="none"
+                        strokeWidth={3}
+                      />
+                      <path
+                        className="admin-donut__slice admin-donut__slice--primary"
+                        d="M18 2.0845a15.9155 15.9155 0 0 1 0 31.831"
+                        fill="none"
+                        strokeWidth={3}
+                        strokeDasharray="60 100"
+                        strokeLinecap="round"
+                      />
+                      <path
+                        className="admin-donut__slice admin-donut__slice--secondary"
+                        d="M18 2.0845a15.9155 15.9155 0 0 1 0 31.831"
+                        fill="none"
+                        strokeWidth={3}
+                        strokeDasharray="30 100"
+                        strokeDashoffset={-60}
+                        strokeLinecap="round"
+                      />
+                      <path
+                        className="admin-donut__slice admin-donut__slice--tertiary"
+                        d="M18 2.0845a15.9155 15.9155 0 0 1 0 31.831"
+                        fill="none"
+                        strokeWidth={3}
+                        strokeDasharray="10 100"
+                        strokeDashoffset={-90}
+                        strokeLinecap="round"
+                      />
+                    </svg>
+                    <div className="admin-donut__center">
+                      <strong>2,430</strong>
+                      <span>Total de packs</span>
+                    </div>
+                  </div>
+                  <ul className="admin-donut__legend">
+                    <li>
+                      <span className="admin-donut__dot admin-donut__dot--primary" />
+                      <span>Starter Pack</span>
+                      <strong>60%</strong>
+                    </li>
+                    <li>
+                      <span className="admin-donut__dot admin-donut__dot--secondary" />
+                      <span>Pro Pack</span>
+                      <strong>30%</strong>
+                    </li>
+                    <li>
+                      <span className="admin-donut__dot admin-donut__dot--tertiary" />
+                      <span>Whale Pack</span>
+                      <strong>10%</strong>
+                    </li>
+                  </ul>
+                </article>
+              </section>
+
+              <section className="admin-card admin-card--activity">
+                <header>
+                  <p className="admin-card__title">Actividad reciente</p>
+                </header>
+                <ul className="admin-activity">
+                  <li>
+                    <div className="admin-activity__icon admin-activity__icon--primary">
+                      <span className="material-symbols-outlined" aria-hidden="true">emoji_events</span>
+                    </div>
+                    <div className="admin-activity__content">
+                      <p>
+                        Usuario <strong>PlayerOne</strong> ganó <strong>$50</strong> en la partida #1024.
+                      </p>
+                      <time>Hace 2 minutos</time>
+                    </div>
+                  </li>
+                  <li>
+                    <div className="admin-activity__icon admin-activity__icon--success">
+                      <span className="material-symbols-outlined" aria-hidden="true">shopping_cart</span>
+                    </div>
+                    <div className="admin-activity__content">
+                      <p>
+                        Usuario <strong>BingoMaster</strong> compró el <strong>Pro Pack</strong>.
+                      </p>
+                      <time>Hace 15 minutos</time>
+                    </div>
+                  </li>
+                  <li>
+                    <div className="admin-activity__icon admin-activity__icon--warning">
+                      <span className="material-symbols-outlined" aria-hidden="true">person_add</span>
+                    </div>
+                    <div className="admin-activity__content">
+                      <p>
+                        Nuevo registro realizado por <strong>Newbie23</strong>.
+                      </p>
+                      <time>Hace 30 minutos</time>
+                    </div>
+                  </li>
+                  <li>
+                    <div className="admin-activity__icon admin-activity__icon--primary">
+                      <span className="material-symbols-outlined" aria-hidden="true">emoji_events</span>
+                    </div>
+                    <div className="admin-activity__content">
+                      <p>
+                        Usuario <strong>LuckyStar</strong> ganó <strong>$120</strong> en la partida #1023.
+                      </p>
+                      <time>Hace 1 hora</time>
+                    </div>
+                  </li>
+                </ul>
+              </section>
+            </>
+          ) : (
+            <section className="admin-transactions">
+              <header className="admin-transactions__header">
+                <div>
+                  <h2 className="admin-transactions__title">Gestión de Transacciones</h2>
+                  <p className="admin-transactions__subtitle">Controla depósitos y retiros en tiempo real.</p>
+                </div>
+                <div className="admin-transactions__badge">Pendientes: <strong>{pendingCount}</strong></div>
+              </header>
+
+              <div className="admin-transactions__toolbar">
+                <div className="admin-transactions__filters">
+                  <button type="button" className="admin-icon-btn" aria-label="Filtrar transacciones">
+                    <span className="material-symbols-outlined" aria-hidden="true">filter_list</span>
+                  </button>
+                  <button type="button" className="admin-icon-btn" aria-label="Elegir periodo">
+                    <span className="material-symbols-outlined" aria-hidden="true">calendar_today</span>
+                  </button>
+                  <label className="admin-transactions__search">
+                    <span className="material-symbols-outlined" aria-hidden="true">search</span>
+                    <input
+                      type="search"
+                      placeholder="Buscar por ID, usuario..."
+                      value={search}
+                      onChange={(event) => setSearch(event.target.value)}
+                    />
+                  </label>
+                </div>
+                <div className="admin-transactions__actions">
+                  <button type="button" className="admin-transactions__bulk admin-transactions__bulk--deny">
+                    <span className="material-symbols-outlined" aria-hidden="true" style={{ fontVariationSettings: "'FILL' 1" }}>
+                      cancel
+                    </span>
+                    <span>Rechazar seleccionados</span>
+                  </button>
+                  <button type="button" className="admin-transactions__bulk admin-transactions__bulk--approve">
+                    <span className="material-symbols-outlined" aria-hidden="true" style={{ fontVariationSettings: "'FILL' 1" }}>
+                      check_circle
+                    </span>
+                    <span>Aprobar seleccionados</span>
+                  </button>
+                </div>
+              </div>
+
+              <div className="admin-transactions__table-wrapper">
+                <div className="admin-transactions__table-scroll">
+                  <table className="admin-transactions__table">
+                    <thead>
+                      <tr>
+                        <th scope="col">
+                          <input
+                            ref={selectAllRef}
+                            type="checkbox"
+                            checked={allSelected}
+                            onChange={handleToggleAll}
+                            aria-label="Seleccionar todas las transacciones visibles"
+                          />
+                        </th>
+                        <th scope="col">ID Transacción</th>
+                        <th scope="col">Usuario</th>
+                        <th scope="col">Fecha y hora</th>
+                        <th scope="col">Monto</th>
+                        <th scope="col">Tipo</th>
+                        <th scope="col">Estado</th>
+                        <th scope="col" className="admin-transactions__actions-header">Acciones</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredTransactions.map((txn) => {
+                        const isSelected = selectedTransactions.includes(txn.id);
+                        const statusLabel = txn.status === "pending" ? "Pendiente" : txn.status === "approved" ? "Aprobado" : "Rechazado";
+                        return (
+                          <tr
+                            key={txn.id}
+                            className={isSelected ? "admin-transactions__row admin-transactions__row--selected" : "admin-transactions__row"}
+                          >
+                            <td>
+                              <input
+                                type="checkbox"
+                                checked={isSelected}
+                                onChange={() => handleToggleRow(txn.id)}
+                                aria-label={`Seleccionar ${txn.id}`}
+                              />
+                            </td>
+                            <td className="admin-transactions__cell--highlight">{txn.id}</td>
+                            <td>{txn.user}</td>
+                            <td>{txn.timestamp}</td>
+                            <td className="admin-transactions__cell--highlight">${txn.amount.toFixed(2)}</td>
+                            <td>
+                              <span
+                                className={`admin-transactions__chip ${
+                                  txn.type === "deposit"
+                                    ? "admin-transactions__chip--deposit"
+                                    : "admin-transactions__chip--withdraw"
+                                }`}
+                              >
+                                {txn.type === "deposit" ? "Depósito" : "Retiro"}
+                              </span>
+                            </td>
+                            <td>
+                              <span className={`admin-transactions__chip admin-transactions__chip--${txn.status}`}>
+                                {statusLabel}
+                              </span>
+                            </td>
+                            <td>
+                              <div className="admin-transactions__row-actions">
+                                <button type="button" className="admin-transactions__row-button admin-transactions__row-button--deny" aria-label="Rechazar">
+                                  <span className="material-symbols-outlined" aria-hidden="true">cancel</span>
+                                </button>
+                                <button type="button" className="admin-transactions__row-button admin-transactions__row-button--approve" aria-label="Aprobar">
+                                  <span className="material-symbols-outlined" aria-hidden="true">check_circle</span>
+                                </button>
+                                <button type="button" className="admin-transactions__row-button admin-transactions__row-button--neutral" aria-label="Más acciones">
+                                  <span className="material-symbols-outlined" aria-hidden="true">more_vert</span>
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                      {filteredTransactions.length === 0 && (
+                        <tr>
+                          <td colSpan={8} className="admin-transactions__empty">
+                            No hay transacciones que coincidan con la búsqueda.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <nav className="admin-transactions__pagination" aria-label="Paginación de transacciones">
+                <button type="button" className="admin-transactions__page-btn" aria-label="Anterior">
+                  <span className="material-symbols-outlined" aria-hidden="true">chevron_left</span>
+                </button>
+                <button type="button" className="admin-transactions__page-btn admin-transactions__page-btn--active">1</button>
+                <button type="button" className="admin-transactions__page-btn">2</button>
+                <button type="button" className="admin-transactions__page-btn">3</button>
+                <span className="admin-transactions__page-ellipsis">...</span>
+                <button type="button" className="admin-transactions__page-btn">10</button>
+                <button type="button" className="admin-transactions__page-btn" aria-label="Siguiente">
+                  <span className="material-symbols-outlined" aria-hidden="true">chevron_right</span>
+                </button>
+              </nav>
+            </section>
+          )}
+        </div>
+      </main>
+    </div>
+  );
+}
+
+function UserDashboard({
+  me,
+  onLogout,
+  onTopup,
+  onWithdraw,
+  isProcessingTopup,
+  transactions,
+  message,
+  error,
+}: UserDashboardProps) {
+  const [search, setSearch] = useState("");
+  const [typeFilter, setTypeFilter] = useState<UserTransactionType | "all">("all");
+  const [rangeFilter, setRangeFilter] = useState("30");
+  const [depositAmount, setDepositAmount] = useState(50);
+
+  const filteredTransactions = useMemo(() => {
+    const threshold = rangeFilter === "all" ? null : Number.parseInt(rangeFilter, 10);
+    const minDate = threshold ? (() => { const d = new Date(); d.setDate(d.getDate() - threshold); return d; })() : null;
+
+    return transactions.filter((txn) => {
+      const matchesType = typeFilter === "all" || txn.type === typeFilter;
+      const matchesSearch =
+        !search.trim() ||
+        txn.description.toLowerCase().includes(search.trim().toLowerCase()) ||
+        txn.id.toLowerCase().includes(search.trim().toLowerCase());
+      const matchesRange = !minDate || new Date(txn.timestamp) >= minDate;
+      return matchesType && matchesSearch && matchesRange;
+    });
+  }, [transactions, search, typeFilter, rangeFilter]);
+
+  function formatAmount(amount: number) {
+    const sign = amount >= 0 ? "+" : "-";
+    return `${sign}$${Math.abs(amount).toFixed(2)}`;
+  }
+
+  function formatDate(timestamp: string) {
+    const date = new Date(timestamp);
+    return date.toLocaleDateString("es-ES", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+    });
+  }
+
+  function typeBadge(type: UserTransactionType) {
+    switch (type) {
+      case "deposit":
+        return { icon: "arrow_upward", label: "Depósito", className: "user-chip user-chip--deposit" };
+      case "withdraw":
+        return { icon: "arrow_downward", label: "Retiro", className: "user-chip user-chip--withdraw" };
+      case "prize":
+        return { icon: "emoji_events", label: "Premio", className: "user-chip user-chip--prize" };
+      case "purchase":
+      default:
+        return { icon: "shopping_cart", label: "Compra", className: "user-chip user-chip--purchase" };
+    }
+  }
+
+  const balance = Number.isFinite(me.balance) ? me.balance : 0;
+
+  return (
+    <div className="user-shell">
+      <header className="user-topbar">
+        <div className="user-brand">
+          <div className="user-brand__icon" aria-hidden="true">
+            <svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="BingoApp">
+              <path
+                d="M39.475 21.6262C40.358 21.4363 40.6863 21.5589 40.7581 21.5934C40.7876 21.655 40.8547 21.857 40.8082 22.3336C40.7408 23.0255 40.4502 24.0046 39.8572 25.2301C38.6799 27.6631 36.5085 30.6631 33.5858 33.5858C30.6631 36.5085 27.6632 38.6799 25.2301 39.8572C24.0046 40.4502 23.0255 40.7407 22.3336 40.8082C21.8571 40.8547 21.6551 40.7875 21.5934 40.7581C21.5589 40.6863 21.4363 40.358 21.6262 39.475C21.8562 38.4054 22.4689 36.9657 23.5038 35.2817C24.7575 33.2417 26.5497 30.9744 28.7621 28.762C30.9744 26.5497 33.2417 24.7574 35.2817 23.5037C36.9657 22.4689 38.4054 21.8562 39.475 21.6262ZM4.41189 29.2403L18.7597 43.5881C19.8813 44.7097 21.4027 44.9179 22.7217 44.7893C24.0585 44.659 25.5148 44.1631 26.9723 43.4579C29.9052 42.0387 33.2618 39.5667 36.4142 36.4142C39.5667 33.2618 42.0387 29.9052 43.4579 26.9723C44.1631 25.5148 44.659 24.0585 44.7893 22.7217C44.9179 21.4027 44.7097 19.8813 43.5881 18.7597L29.2403 4.41187C27.8527 3.02428 25.8765 3.02573 24.2861 3.36776C22.6081 3.72863 20.7334 4.58419 18.8396 5.74801C16.4978 7.18716 13.9881 9.18353 11.5858 11.5858C9.18354 13.988 7.18717 16.4978 5.74802 18.8396C4.58421 20.7334 3.72865 22.6081 3.36778 24.2861C3.02574 25.8765 3.02429 27.8527 4.41189 29.2403Z"
+                fill="currentColor"
+                fillRule="evenodd"
+                clipRule="evenodd"
+              />
+            </svg>
+          </div>
+          <div>
+            <h1 className="user-brand__title">BingoApp</h1>
+            <p className="user-brand__subtitle">Tu panel personal</p>
+          </div>
+        </div>
+        <nav className="user-topnav" aria-label="Navegación principal">
+          <a className="user-topnav__link" href="#">Jugar</a>
+          <a className="user-topnav__link user-topnav__link--active" href="#">Mi balance</a>
+          <a className="user-topnav__link" href="#">Perfil</a>
+          <a className="user-topnav__link" href="#">Ayuda</a>
+        </nav>
+        <div className="user-topnav__right">
+          <button type="button" className="user-balance-pill">
+            <span className="material-symbols-outlined" aria-hidden="true">account_balance_wallet</span>
+            <span className="user-balance-pill__label">
+              {balance.toLocaleString("es-ES", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} créditos
+            </span>
+          </button>
+          <div className="user-avatar" aria-hidden="true" />
+          <button type="button" className="user-logout" onClick={onLogout}>
+            <span className="material-symbols-outlined" aria-hidden="true">logout</span>
+          </button>
+        </div>
+      </header>
+
+      <main className="user-main">
+        {(error || message) && (
+          <div className="user-alerts">
+            {error ? (
+              <div className="user-alert user-alert--error">{error}</div>
+            ) : (
+              message && <div className="user-alert user-alert--info">{message}</div>
+            )}
+          </div>
+        )}
+
+        <section className="user-summary">
+          <article className="user-summary__card">
+            <div className="user-summary__heading">
+              <span className="material-symbols-outlined" aria-hidden="true">savings</span>
+              <h2>Créditos disponibles</h2>
+            </div>
+            <p className="user-summary__balance">
+              {balance.toLocaleString("es-ES", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </p>
+            <span className="user-summary__caption">Actualizado al {new Date().toLocaleDateString("es-ES")}</span>
+          </article>
+          <article className="user-actions">
+            <div className="user-actions__input">
+              <label htmlFor="deposit-amount">Monto a depositar</label>
+              <div className="user-actions__amount">
+                <span>$</span>
+                <input
+                  id="deposit-amount"
+                  type="number"
+                  min={5}
+                  step={5}
+                  value={depositAmount}
+                  onChange={(event) => setDepositAmount(Number(event.target.value) || 0)}
+                />
+              </div>
+              <div className="user-actions__quick">
+                {[25, 50, 100].map((preset) => (
+                  <button key={preset} type="button" onClick={() => setDepositAmount(preset)}>
+                    ${preset}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="user-actions__buttons">
+              <button
+                type="button"
+                className="user-actions__primary"
+                onClick={() => onTopup(depositAmount)}
+                disabled={isProcessingTopup || depositAmount <= 0}
+              >
+                <span className="material-symbols-outlined" aria-hidden="true">add_card</span>
+                {isProcessingTopup ? "Procesando..." : "Depositar créditos"}
+              </button>
+              <button type="button" className="user-actions__secondary" onClick={onWithdraw}>
+                <span className="material-symbols-outlined" aria-hidden="true">payments</span>
+                Retirar créditos
+              </button>
+            </div>
+          </article>
+        </section>
+
+        <section className="user-transactions">
+          <header className="user-transactions__header">
+            <div>
+              <h2>Historial de transacciones</h2>
+              <p>Movimientos recientes en tu cuenta</p>
+            </div>
+            <div className="user-transactions__filters">
+              <label className="user-search">
+                <span className="material-symbols-outlined" aria-hidden="true">search</span>
+                <input
+                  type="search"
+                  placeholder="Buscar transacción..."
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                />
+              </label>
+              <select
+                className="user-select"
+                value={typeFilter}
+                onChange={(event) => setTypeFilter(event.target.value as UserTransactionType | "all")}
+              >
+                <option value="all">Todos los tipos</option>
+                <option value="deposit">Depósitos</option>
+                <option value="withdraw">Retiros</option>
+                <option value="purchase">Compras</option>
+                <option value="prize">Premios</option>
+              </select>
+              <select className="user-select" value={rangeFilter} onChange={(event) => setRangeFilter(event.target.value)}>
+                <option value="30">Últimos 30 días</option>
+                <option value="90">Últimos 3 meses</option>
+                <option value="365">Este año</option>
+                <option value="all">Todos</option>
+              </select>
+            </div>
+          </header>
+
+          <div className="user-transactions__table-wrapper">
+            <table className="user-transactions__table">
+              <thead>
+                <tr>
+                  <th scope="col">Fecha</th>
+                  <th scope="col">Tipo</th>
+                  <th scope="col">Descripción</th>
+                  <th scope="col" className="user-transactions__amount-heading">Monto</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredTransactions.map((txn) => {
+                  const badge = typeBadge(txn.type);
+                  return (
+                    <tr key={txn.id}>
+                      <td>{formatDate(txn.timestamp)}</td>
+                      <td>
+                        <span className={badge.className}>
+                          <span className="material-symbols-outlined" aria-hidden="true">
+                            {badge.icon}
+                          </span>
+                          {badge.label}
+                        </span>
+                      </td>
+                      <td>{txn.description}</td>
+                      <td className={`user-transactions__amount user-transactions__amount--${txn.type}`}>
+                        {formatAmount(txn.amount)}
+                      </td>
+                    </tr>
+                  );
+                })}
+                {filteredTransactions.length === 0 && (
+                  <tr>
+                    <td colSpan={4} className="user-transactions__empty">
+                      No se encontraron movimientos para los filtros seleccionados.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </main>
+    </div>
+  );
+}
+
 export default function App() {
-  const [email, setEmail] = useState("test@example.com");
-  const [password, setPassword] = useState("12345678");
+  const [email, setEmail] = useState("admin@bingo.local");
+  const [password, setPassword] = useState("admin123");
   const [games, setGames] = useState<Game[]>([]);
   const [price, setPrice] = useState(0.5);
   const [autoEnabled, setAutoEnabled] = useState(false);
@@ -48,8 +894,12 @@ export default function App() {
   const [gameState, setGameState] = useState<GameState | null>(null);
   const [autoRefresh, setAutoRefresh] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [isFetchingMe, setIsFetchingMe] = useState(false);
+  const [isTopupProcessing, setIsTopupProcessing] = useState(false);
+  const [userTransactions, setUserTransactions] = useState<UserTransaction[]>(USER_SAMPLE_TRANSACTIONS);
 
   const logged = !!localStorage.getItem("token");
+  const isAdmin = me?.is_admin ?? false;
   const canCreate = useMemo(() => logged && price >= 0.5, [logged, price]);
   const canTopup = useMemo(() => logged && topupAmount > 0, [logged, topupAmount]);
   const emailOk = useMemo(() => /.+@.+\..+/.test(email), [email]);
@@ -62,12 +912,34 @@ export default function App() {
       setErrors("Email o contraseña inválidos (min 6 caracteres)");
       return;
     }
-    const res = await api.post("/auth/login", { email, password });
-    localStorage.setItem("token", res.data.access_token);
-    setMsg("Logueado");
-    await fetchMe();
-    await fetchTickets();
-    fetchGames();
+    try {
+      const res = await api.post("/auth/login", { email, password });
+      localStorage.setItem("token", res.data.access_token);
+      setMsg("Sesión iniciada");
+      const profile = await fetchMe();
+      if (profile?.is_admin) {
+        setTickets([]);
+        setGames([]);
+        setSelectedGameId(null);
+        setGameState(null);
+        setAutoRefresh(false);
+        return;
+      }
+      await fetchTickets();
+      await fetchGames();
+    } catch (error: unknown) {
+      setMsg("");
+      if (
+        error &&
+        typeof error === "object" &&
+        "response" in error &&
+        (error as any).response?.data
+      ) {
+        setErrors((error as any).response.data as string);
+      } else {
+        setErrors("No se pudo iniciar sesión, inténtalo de nuevo");
+      }
+    }
   }
 
   async function fetchGames() {
@@ -75,12 +947,34 @@ export default function App() {
     setGames(res.data.items);
   }
 
-  async function fetchMe() {
+  async function fetchMe(): Promise<Me | null> {
+    setIsFetchingMe(true);
     try {
-      const res = await api.get("/auth/me");
-      setMe({ id: res.data.id, email: res.data.email, balance: res.data.balance, alias: res.data.alias });
-    } catch {
+      const { data } = await api.get("/auth/me");
+      const profile: Me = {
+        id: data.id,
+        email: data.email,
+        balance: data.balance,
+        alias: data.alias,
+        is_admin: data.is_admin,
+        is_verified: data.is_verified,
+      };
+      setMe(profile);
+      return profile;
+    } catch (error: unknown) {
       setMe(null);
+      if (
+        error &&
+        typeof error === "object" &&
+        "response" in error &&
+        (error as any).response?.status === 401
+      ) {
+        localStorage.removeItem("token");
+        setMsg("La sesión expiró. Inicia sesión nuevamente.");
+      }
+      return null;
+    } finally {
+      setIsFetchingMe(false);
     }
   }
 
@@ -155,15 +1049,52 @@ export default function App() {
     }
   }
 
-  async function topup() {
-    try {
-      if (!canTopup) return;
-      const { data } = await api.post(`/wallet/topup`, { amount: topupAmount });
-      setMsg(`Saldo: $${data.balance.toFixed(2)}`);
-      await fetchMe();
-    } catch (e: any) {
-      setMsg(e?.response?.data || "Error al recargar");
+  async function topup(amountOverride?: number) {
+    const amount = Number(amountOverride ?? topupAmount);
+    setErrors("");
+    setMsg("");
+    if (!logged || !Number.isFinite(amount) || amount <= 0) {
+      setErrors("El monto debe ser mayor a 0");
+      return;
     }
+    try {
+      setIsTopupProcessing(true);
+      const { data } = await api.post(`/wallet/topup`, { amount });
+      setMsg(`Saldo actualizado: $${data.balance.toFixed(2)}`);
+      if (amountOverride !== undefined) {
+        setTopupAmount(5);
+      }
+      await fetchMe();
+      setUserTransactions((prev) => [
+        {
+          id: `TXU-${Date.now()}`,
+          timestamp: new Date().toISOString(),
+          type: "deposit" as UserTransactionType,
+          description: "Recarga manual de créditos",
+          amount,
+        },
+        ...prev,
+      ].slice(0, 50));
+    } catch (e: any) {
+      setMsg("");
+      setErrors(e?.response?.data || "Error al recargar");
+    } finally {
+      setIsTopupProcessing(false);
+    }
+  }
+
+  function handleWithdrawal() {
+    setMsg("La solicitud de retiro estará disponible próximamente.");
+    setUserTransactions((prev) => [
+      {
+        id: `TXU-${Date.now()}-WD`,
+        timestamp: new Date().toISOString(),
+        type: "withdraw" as UserTransactionType,
+        description: "Solicitud de retiro registrada",
+        amount: -50,
+      },
+      ...prev,
+    ].slice(0, 50));
   }
 
   function logout() {
@@ -171,15 +1102,39 @@ export default function App() {
     setMe(null);
     setTickets([]);
     setMsg("Sesión cerrada");
+    setUserTransactions(USER_SAMPLE_TRANSACTIONS);
   }
 
   useEffect(() => {
     fetchGames();
-    if (logged) {
-      fetchMe();
-      fetchTickets();
-    }
   }, []);
+
+  useEffect(() => {
+    if (!logged) {
+      setMe(null);
+      setTickets([]);
+      return;
+    }
+    (async () => {
+      const profile = await fetchMe();
+      if (profile?.is_admin) {
+        setTickets([]);
+        setGames([]);
+        return;
+      }
+      await fetchTickets();
+      await fetchGames();
+    })();
+  }, [logged]);
+
+  useEffect(() => {
+    if (!isAdmin) {
+      return;
+    }
+    setSelectedGameId(null);
+    setGameState(null);
+    setAutoRefresh(false);
+  }, [isAdmin]);
 
   useEffect(() => {
     if (!selectedGameId || !autoRefresh) return;
@@ -270,6 +1225,35 @@ export default function App() {
     );
   }
 
+  if (logged && isFetchingMe && !me) {
+    return (
+      <div className="auth-shell">
+        <div className="auth-card auth-card--loading">
+          <p className="auth-subtitle">Cargando perfil...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (logged && me && me.is_admin) {
+    return <AdminDashboard me={me} onLogout={logout} transactions={ADMIN_SAMPLE_TRANSACTIONS} />;
+  }
+
+  if (logged && me && !me.is_admin) {
+    return (
+      <UserDashboard
+        me={me}
+        onLogout={logout}
+        onTopup={topup}
+        onWithdraw={handleWithdrawal}
+        isProcessingTopup={isTopupProcessing}
+        transactions={userTransactions}
+        message={msg}
+        error={errors}
+      />
+    );
+  }
+
   return (
     <div className="container stack">
       <header className="stack">
@@ -285,7 +1269,7 @@ export default function App() {
         </div>
         <div className="row">
           <input className="input" type="number" min={0.5} step={0.5} value={topupAmount} onChange={(e) => setTopupAmount(parseFloat(e.target.value) || 0)} />
-          <button className="btn primary" onClick={topup} disabled={!canTopup}>Recargar</button>
+          <button className="btn primary" onClick={() => topup()} disabled={!canTopup}>Recargar</button>
         </div>
       </section>
 

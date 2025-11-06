@@ -14,6 +14,7 @@ class User(SQLModel, table=True):
     email: str = Field(index=True, unique=True)
     hashed_password: str
     is_verified: bool = True
+    is_admin: bool = False
     alias: Optional[str] = None
 
     # Relación 1:1 eliminada temporalmente para evitar conflictos de resolución

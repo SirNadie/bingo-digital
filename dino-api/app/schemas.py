@@ -45,6 +45,7 @@ class MeResponse(BaseModel):
     balance: float
     alias: Optional[str] = None
     is_verified: bool = True
+    is_admin: bool = False
 
 
 class TicketCreate(BaseModel):

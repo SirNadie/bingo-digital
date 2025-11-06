@@ -16,3 +16,7 @@ else:
 
 # Dev helpers
 AUTO_REGISTER_ON_LOGIN = os.getenv("AUTO_REGISTER_ON_LOGIN", "true").lower() == "true"
+
+# Admin bootstrap
+ADMIN_EMAIL = os.getenv("ADMIN_EMAIL", "admin@bingo.local")
+ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "admin123")
