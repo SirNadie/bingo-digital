@@ -118,6 +118,40 @@ type UserDashboardProps = {
   transactions: UserTransaction[];
   message: string;
   error: string;
+  currentView: UserView;
+  onNavigate: (view: UserView) => void;
+};
+
+type UserStatsProps = {
+  me: Me;
+  onLogout: () => void;
+  currentView: UserView;
+  onNavigate: (view: UserView) => void;
+};
+
+type UserJoinGamesProps = {
+  me: Me;
+  onLogout: () => void;
+  currentView: UserView;
+  onNavigate: (view: UserView) => void;
+};
+
+type UserCreateGameProps = {
+  me: Me;
+  onLogout: () => void;
+  currentView: UserView;
+  onNavigate: (view: UserView) => void;
+};
+
+type JoinableGameCard = {
+  id: string;
+  creator: string;
+  pot: number;
+  price: number;
+  sold: string;
+  rewards: string;
+  breakdown: string;
+  actionLabel: string;
 };
 
 const USER_SAMPLE_TRANSACTIONS: UserTransaction[] = [
@@ -157,6 +191,116 @@ const USER_SAMPLE_TRANSACTIONS: UserTransaction[] = [
     amount: -100,
   },
 ];
+
+type UserView = "balance" | "stats" | "join" | "create";
+
+const USER_STATS_OVERVIEW = [
+  { label: "Partidas jugadas", value: "152" },
+  { label: "Porcentaje de victorias", value: "58.5%" },
+  { label: "Créditos ganados", value: "15 400" },
+  { label: "Créditos gastados", value: "9 800" },
+];
+
+const USER_STATS_HIGHLIGHTS = [
+  { icon: "emoji_events", label: "Mayor premio", value: "2 500 créditos" },
+  { icon: "trending_up", label: "Mejor racha", value: "8 partidas" },
+  { icon: "casino", label: "Bingos cantados", value: "95" },
+  { icon: "military_tech", label: "Logro desbloqueado", value: "Maestro del Bingo" },
+];
+
+const JOINABLE_GAMES: JoinableGameCard[] = [
+  {
+    id: "join-001",
+    creator: "Juan Pérez",
+    pot: 125.5,
+    price: 1,
+    sold: "125 / ∞",
+    rewards: "2 premios",
+    breakdown: "Línea: 40% · Bingo: 60%",
+    actionLabel: "Unirse a la partida",
+  },
+  {
+    id: "join-002",
+    creator: "Ana García",
+    pot: 45,
+    price: 0.5,
+    sold: "90 / 200",
+    rewards: "3 premios",
+    breakdown: "Línea: 20% · Doble: 30% · Bingo: 50%",
+    actionLabel: "Comprar cartones",
+  },
+  {
+    id: "join-003",
+    creator: "Bingo Club",
+    pot: 278,
+    price: 2,
+    sold: "139 / ∞",
+    rewards: "1 premio",
+    breakdown: "Bingo: 100%",
+    actionLabel: "Unirse a la partida",
+  },
+];
+
+type UserHeaderProps = {
+  view: UserView;
+  balance: number;
+  onNavigate: (view: UserView) => void;
+  onLogout: () => void;
+};
+
+function UserHeader({ view, balance, onNavigate, onLogout }: UserHeaderProps) {
+  const effectiveView = view === "join" || view === "create" ? "balance" : view;
+  const formattedBalance = balance.toLocaleString("es-ES", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return (
+    <header className="user-topbar">
+      <div className="user-brand">
+        <div className="user-brand__icon" aria-hidden="true">
+          <svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="BingoApp">
+            <path
+              d="M39.475 21.6262C40.358 21.4363 40.6863 21.5589 40.7581 21.5934C40.7876 21.655 40.8547 21.857 40.8082 22.3336C40.7408 23.0255 40.4502 24.0046 39.8572 25.2301C38.6799 27.6631 36.5085 30.6631 33.5858 33.5858C30.6631 36.5085 27.6632 38.6799 25.2301 39.8572C24.0046 40.4502 23.0255 40.7407 22.3336 40.8082C21.8571 40.8547 21.6551 40.7875 21.5934 40.7581C21.5589 40.6863 21.4363 40.358 21.6262 39.475C21.8562 38.4054 22.4689 36.9657 23.5038 35.2817C24.7575 33.2417 26.5497 30.9744 28.7621 28.762C30.9744 26.5497 33.2417 24.7574 35.2817 23.5037C36.9657 22.4689 38.4054 21.8562 39.475 21.6262ZM4.41189 29.2403L18.7597 43.5881C19.8813 44.7097 21.4027 44.9179 22.7217 44.7893C24.0585 44.659 25.5148 44.1631 26.9723 43.4579C29.9052 42.0387 33.2618 39.5667 36.4142 36.4142C39.5667 33.2618 42.0387 29.9052 43.4579 26.9723C44.1631 25.5148 44.659 24.0585 44.7893 22.7217C44.9179 21.4027 44.7097 19.8813 43.5881 18.7597L29.2403 4.41187C27.8527 3.02428 25.8765 3.02573 24.2861 3.36776C22.6081 3.72863 20.7334 4.58419 18.8396 5.74801C16.4978 7.18716 13.9881 9.18353 11.5858 11.5858C9.18354 13.988 7.18717 16.4978 5.74802 18.8396C4.58421 20.7334 3.72865 22.6081 3.36778 24.2861C3.02574 25.8765 3.02429 27.8527 4.41189 29.2403Z"
+              fill="currentColor"
+              fillRule="evenodd"
+              clipRule="evenodd"
+            />
+          </svg>
+        </div>
+        <div>
+          <h1 className="user-brand__title">BingoApp</h1>
+          <p className="user-brand__subtitle">Tu panel personal</p>
+        </div>
+      </div>
+      <nav className="user-topnav" aria-label="Navegación principal">
+        <button
+          type="button"
+          className={`user-topnav__link ${effectiveView === "balance" ? "user-topnav__link--active" : ""}`}
+          onClick={() => onNavigate("balance")}
+        >
+          Mi balance
+        </button>
+        <button
+          type="button"
+          className={`user-topnav__link ${effectiveView === "stats" ? "user-topnav__link--active" : ""}`}
+          onClick={() => onNavigate("stats")}
+        >
+          Mis estadísticas
+        </button>
+        <button type="button" className="user-topnav__link">
+          Ayuda
+        </button>
+      </nav>
+      <div className="user-topnav__right">
+        <button type="button" className="user-balance-pill">
+          <span className="material-symbols-outlined" aria-hidden="true">account_balance_wallet</span>
+          <span className="user-balance-pill__label">{formattedBalance} créditos</span>
+        </button>
+        <div className="user-avatar" aria-hidden="true" />
+        <button type="button" className="user-logout" onClick={onLogout}>
+          <span className="material-symbols-outlined" aria-hidden="true">logout</span>
+        </button>
+      </div>
+    </header>
+  );
+}
 
 function AdminDashboard({ me, onLogout, transactions }: AdminDashboardProps) {
   const [view, setView] = useState<AdminView>("dashboard");
@@ -633,6 +777,289 @@ function AdminDashboard({ me, onLogout, transactions }: AdminDashboardProps) {
   );
 }
 
+function UserStats({ me, onLogout, currentView, onNavigate }: UserStatsProps) {
+  return (
+    <div className="user-stats-shell">
+      <UserHeader view={currentView} balance={me.balance} onNavigate={onNavigate} onLogout={onLogout} />
+
+      <main className="user-stats-main">
+        <section className="user-stats-header">
+          <div>
+            <h2>Mis estadísticas</h2>
+            <p>Tu rendimiento y actividad en el juego.</p>
+          </div>
+          <div className="user-stats-filters">
+            <button type="button" className="user-stats-chip user-stats-chip--ghost">Últimos 7 días</button>
+            <button type="button" className="user-stats-chip user-stats-chip--active">Último mes</button>
+            <button type="button" className="user-stats-chip user-stats-chip--ghost">Desde siempre</button>
+          </div>
+        </section>
+
+        <section className="user-stats-overview">
+          {USER_STATS_OVERVIEW.map((item) => (
+            <article key={item.label}>
+              <p>{item.label}</p>
+              <strong>{item.value}</strong>
+            </article>
+          ))}
+        </section>
+
+        <section className="user-stats-panels">
+          <article className="user-stats-chart">
+            <header>
+              <div>
+                <p>Actividad reciente</p>
+                <span>Último mes</span>
+              </div>
+              <div className="user-stats-chart__highlight">
+                <strong>+12.5%</strong>
+                <span>Créditos</span>
+              </div>
+            </header>
+            <div className="user-stats-chart__graph">
+              <svg viewBox="-3 0 478 150" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="tendencia de créditos">
+                <path
+                  d="M0 109C18.1538 109 18.1538 21 36.3077 21C54.4615 21 54.4615 41 72.6154 41C90.7692 41 90.7692 93 108.923 93C127.077 93 127.077 33 145.231 33C163.385 33 163.385 101 181.538 101C199.692 101 199.692 61 217.846 61C236 61 236 45 254.154 45C272.308 45 272.308 121 290.462 121C308.615 121 308.615 149 326.769 149C344.923 149 344.923 1 363.077 1C381.231 1 381.231 81 399.385 81C417.538 81 417.538 129 435.692 129C453.846 129 453.846 25 472 25V149H326.769H0V109Z"
+                  fill="url(#user-stats-gradient)"
+                  fillOpacity="0.18"
+                />
+                <path
+                  d="M0 109C18.1538 109 18.1538 21 36.3077 21C54.4615 21 54.4615 41 72.6154 41C90.7692 41 90.7692 93 108.923 93C127.077 93 127.077 33 145.231 33C163.385 33 163.385 101 181.538 101C199.692 101 199.692 61 217.846 61C236 61 236 45 254.154 45C272.308 45 272.308 121 290.462 121C308.615 121 308.615 149 326.769 149C344.923 149 344.923 1 363.077 1C381.231 1 381.231 81 399.385 81C417.538 81 417.538 129 435.692 129C453.846 129 453.846 25 472 25"
+                  stroke="#135bec"
+                  strokeLinecap="round"
+                  strokeWidth="3"
+                />
+                <defs>
+                  <linearGradient id="user-stats-gradient" x1="236" x2="236" y1="1" y2="149" gradientUnits="userSpaceOnUse">
+                    <stop stopColor="#135bec" />
+                    <stop offset="1" stopColor="#135bec" stopOpacity="0" />
+                  </linearGradient>
+                </defs>
+              </svg>
+              <div className="user-stats-chart__ticks">
+                <span>Semana 1</span>
+                <span>Semana 2</span>
+                <span>Semana 3</span>
+                <span>Semana 4</span>
+              </div>
+            </div>
+          </article>
+          <article className="user-stats-highlights">
+            <h3>Tus mejores momentos</h3>
+            <ul>
+              {USER_STATS_HIGHLIGHTS.map((item) => (
+                <li key={item.label}>
+                  <div className="user-stats-highlights__icon">
+                    <span className="material-symbols-outlined" aria-hidden="true">
+                      {item.icon}
+                    </span>
+                  </div>
+                  <div>
+                    <p>{item.label}</p>
+                    <strong>{item.value}</strong>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </article>
+        </section>
+      </main>
+    </div>
+  );
+}
+
+function UserJoinGames({ me, onLogout, currentView, onNavigate }: UserJoinGamesProps) {
+  return (
+    <div className="user-join-shell">
+      <UserHeader view={currentView} balance={me.balance} onNavigate={onNavigate} onLogout={onLogout} />
+
+      <main className="user-join-main">
+        <section className="user-join-header">
+          <div>
+            <h2>Partidas activas</h2>
+            <p>Busca una sala y únete a la diversión.</p>
+          </div>
+          <div className="user-join-actions">
+            <label className="user-join-search">
+              <span className="material-symbols-outlined" aria-hidden="true">search</span>
+              <input type="search" placeholder="Buscar por creador..." />
+            </label>
+            <button type="button" className="user-join-create" aria-label="Crear nueva partida">
+              <span className="material-symbols-outlined" aria-hidden="true">add</span>
+            </button>
+          </div>
+        </section>
+
+        <section className="user-join-grid">
+          {JOINABLE_GAMES.map((game) => (
+            <article key={game.id} className="user-join-card">
+              <div className="user-join-card__body">
+                <header>
+                  <div>
+                    <p>Creado por</p>
+                    <h3>{game.creator}</h3>
+                  </div>
+                  <div className="user-join-pot">
+                    <p>Pozo actual</p>
+                    <strong>{game.pot.toLocaleString("es-ES", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</strong>
+                    <span>créditos</span>
+                  </div>
+                </header>
+                <div className="user-join-divider" />
+                <ul>
+                  <li>
+                    <span>Precio del cartón</span>
+                    <span className="user-join-tag">{game.price.toFixed(1)} créditos</span>
+                  </li>
+                  <li>
+                    <span>Cartones vendidos</span>
+                    <strong>{game.sold}</strong>
+                  </li>
+                  <li>
+                    <span>Plantilla de premios</span>
+                    <strong>{game.rewards}</strong>
+                  </li>
+                  <li className="user-join-breakdown">{game.breakdown}</li>
+                </ul>
+              </div>
+              <footer>
+                <button type="button" className="user-join-action">
+                  {game.actionLabel}
+                </button>
+              </footer>
+            </article>
+          ))}
+        </section>
+      </main>
+    </div>
+  );
+}
+
+function UserCreateGame({ me, onLogout, currentView, onNavigate }: UserCreateGameProps) {
+  return (
+    <div className="user-create-shell">
+      <UserHeader view={currentView} balance={me.balance} onNavigate={onNavigate} onLogout={onLogout} />
+
+      <main className="user-create-main">
+        <div className="user-create-content">
+          <section className="user-create-form">
+            <header className="user-create-heading">
+              <div>
+                <h2>Crear nueva partida</h2>
+                <p>Define precio, premios y condiciones de inicio.</p>
+              </div>
+              <button type="button" onClick={() => onNavigate("balance")} className="user-create-back">
+                <span className="material-symbols-outlined" aria-hidden="true">arrow_back</span>
+                Volver
+              </button>
+            </header>
+
+            <div className="user-create-cards">
+              <article className="user-create-card">
+                <h3>Precio por cartón</h3>
+                <div className="user-create-price">
+                  <button type="button" aria-label="Disminuir precio">
+                    <span className="material-symbols-outlined" aria-hidden="true">remove</span>
+                  </button>
+                  <div className="user-create-price__input">
+                    <input type="number" min={0.5} step={0.5} value={0.5} readOnly aria-label="Precio del cartón" />
+                    <span>créditos</span>
+                  </div>
+                  <button type="button" aria-label="Incrementar precio">
+                    <span className="material-symbols-outlined" aria-hidden="true">add</span>
+                  </button>
+                </div>
+                <p className="user-create-note">Mínimo 0.5 créditos, en incrementos de 0.5.</p>
+              </article>
+
+              <article className="user-create-card">
+                <h3>Plantilla de premios</h3>
+                <div className="user-create-prizes">
+                  <button type="button" className="user-create-prize">
+                    <strong>1 Premio</strong>
+                    <span>Línea · 100% del pozo</span>
+                  </button>
+                  <button type="button" className="user-create-prize user-create-prize--active">
+                    <strong>2 Premios</strong>
+                    <span>Línea 40% · Bingo 60%</span>
+                  </button>
+                  <button type="button" className="user-create-prize">
+                    <strong>3 Premios</strong>
+                    <span>Línea 20% · Doble 30% · Bingo 50%</span>
+                  </button>
+                </div>
+              </article>
+
+              <article className="user-create-card">
+                <h3>Inicio automático</h3>
+                <div className="user-create-autostart">
+                  <div className="user-create-autostart__row">
+                    <div>
+                      <p>Iniciar por cartones vendidos</p>
+                      <span>La partida inicia al alcanzar un número de cartones.</span>
+                    </div>
+                    <div className="user-create-autostart__controls">
+                      <input type="number" min={10} value={50} readOnly aria-label="Cartones para iniciar" />
+                      <input type="checkbox" checked readOnly aria-label="Activar inicio por cartones" />
+                    </div>
+                  </div>
+                  <div className="user-create-autostart__row">
+                    <div>
+                      <p>Iniciar por tiempo</p>
+                      <span>La partida inicia luego de un tiempo determinado.</span>
+                    </div>
+                    <div className="user-create-autostart__controls">
+                      <input type="number" value={0} readOnly aria-label="Minutos para iniciar" disabled />
+                      <input type="checkbox" aria-label="Activar inicio por tiempo" />
+                    </div>
+                  </div>
+                </div>
+                <p className="user-create-hint">La partida comenzará cuando se cumpla la primera condición alcanzada.</p>
+              </article>
+            </div>
+          </section>
+
+          <aside className="user-create-summary">
+            <article>
+              <h3>Resumen de la partida</h3>
+              <ul>
+                <li>
+                  <span>Precio / cartón</span>
+                  <strong>0.5 créditos</strong>
+                </li>
+                <li>
+                  <span>Premios</span>
+                  <div>
+                    <strong>Línea: 40%</strong>
+                    <strong>Bingo: 60%</strong>
+                  </div>
+                </li>
+                <li>
+                  <span>Inicio automático</span>
+                  <strong>Por cartones</strong>
+                </li>
+                <li>
+                  <span>Condición</span>
+                  <strong>Al vender 50 cartones</strong>
+                </li>
+              </ul>
+            </article>
+            <div className="user-create-actions">
+              <button type="button" className="user-create-actions__primary">
+                <span className="material-symbols-outlined" aria-hidden="true">check_circle</span>
+                Crear partida
+              </button>
+              <button type="button" className="user-create-actions__secondary" onClick={() => onNavigate("balance")}>
+                Cancelar
+              </button>
+            </div>
+          </aside>
+        </div>
+      </main>
+    </div>
+  );
+}
+
 function UserDashboard({
   me,
   onLogout,
@@ -642,6 +1069,8 @@ function UserDashboard({
   transactions,
   message,
   error,
+  currentView,
+  onNavigate,
 }: UserDashboardProps) {
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState<UserTransactionType | "all">("all");
@@ -695,44 +1124,20 @@ function UserDashboard({
 
   return (
     <div className="user-shell">
-      <header className="user-topbar">
-        <div className="user-brand">
-          <div className="user-brand__icon" aria-hidden="true">
-            <svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="BingoApp">
-              <path
-                d="M39.475 21.6262C40.358 21.4363 40.6863 21.5589 40.7581 21.5934C40.7876 21.655 40.8547 21.857 40.8082 22.3336C40.7408 23.0255 40.4502 24.0046 39.8572 25.2301C38.6799 27.6631 36.5085 30.6631 33.5858 33.5858C30.6631 36.5085 27.6632 38.6799 25.2301 39.8572C24.0046 40.4502 23.0255 40.7407 22.3336 40.8082C21.8571 40.8547 21.6551 40.7875 21.5934 40.7581C21.5589 40.6863 21.4363 40.358 21.6262 39.475C21.8562 38.4054 22.4689 36.9657 23.5038 35.2817C24.7575 33.2417 26.5497 30.9744 28.7621 28.762C30.9744 26.5497 33.2417 24.7574 35.2817 23.5037C36.9657 22.4689 38.4054 21.8562 39.475 21.6262ZM4.41189 29.2403L18.7597 43.5881C19.8813 44.7097 21.4027 44.9179 22.7217 44.7893C24.0585 44.659 25.5148 44.1631 26.9723 43.4579C29.9052 42.0387 33.2618 39.5667 36.4142 36.4142C39.5667 33.2618 42.0387 29.9052 43.4579 26.9723C44.1631 25.5148 44.659 24.0585 44.7893 22.7217C44.9179 21.4027 44.7097 19.8813 43.5881 18.7597L29.2403 4.41187C27.8527 3.02428 25.8765 3.02573 24.2861 3.36776C22.6081 3.72863 20.7334 4.58419 18.8396 5.74801C16.4978 7.18716 13.9881 9.18353 11.5858 11.5858C9.18354 13.988 7.18717 16.4978 5.74802 18.8396C4.58421 20.7334 3.72865 22.6081 3.36778 24.2861C3.02574 25.8765 3.02429 27.8527 4.41189 29.2403Z"
-                fill="currentColor"
-                fillRule="evenodd"
-                clipRule="evenodd"
-              />
-            </svg>
-          </div>
-          <div>
-            <h1 className="user-brand__title">BingoApp</h1>
-            <p className="user-brand__subtitle">Tu panel personal</p>
-          </div>
-        </div>
-        <nav className="user-topnav" aria-label="Navegación principal">
-          <a className="user-topnav__link" href="#">Jugar</a>
-          <a className="user-topnav__link user-topnav__link--active" href="#">Mi balance</a>
-          <a className="user-topnav__link" href="#">Perfil</a>
-          <a className="user-topnav__link" href="#">Ayuda</a>
-        </nav>
-        <div className="user-topnav__right">
-          <button type="button" className="user-balance-pill">
-            <span className="material-symbols-outlined" aria-hidden="true">account_balance_wallet</span>
-            <span className="user-balance-pill__label">
-              {balance.toLocaleString("es-ES", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} créditos
-            </span>
-          </button>
-          <div className="user-avatar" aria-hidden="true" />
-          <button type="button" className="user-logout" onClick={onLogout}>
-            <span className="material-symbols-outlined" aria-hidden="true">logout</span>
-          </button>
-        </div>
-      </header>
+      <UserHeader view={currentView} balance={balance} onNavigate={onNavigate} onLogout={onLogout} />
 
       <main className="user-main">
+        <section className="user-quick-actions">
+          <button type="button" className="user-quick-actions__primary" onClick={() => onNavigate("join")}>
+            <span className="material-symbols-outlined" aria-hidden="true">group_add</span>
+            Unirse a partida
+          </button>
+          <button type="button" className="user-quick-actions__secondary" onClick={() => onNavigate("create")}>
+            <span className="material-symbols-outlined" aria-hidden="true">add_circle</span>
+            Crear partida
+          </button>
+        </section>
+
         {(error || message) && (
           <div className="user-alerts">
             {error ? (
@@ -845,8 +1250,8 @@ function UserDashboard({
                   const badge = typeBadge(txn.type);
                   return (
                     <tr key={txn.id}>
-                      <td>{formatDate(txn.timestamp)}</td>
-                      <td>
+                      <td data-label="Fecha">{formatDate(txn.timestamp)}</td>
+                      <td data-label="Tipo">
                         <span className={badge.className}>
                           <span className="material-symbols-outlined" aria-hidden="true">
                             {badge.icon}
@@ -854,8 +1259,11 @@ function UserDashboard({
                           {badge.label}
                         </span>
                       </td>
-                      <td>{txn.description}</td>
-                      <td className={`user-transactions__amount user-transactions__amount--${txn.type}`}>
+                      <td data-label="Descripción">{txn.description}</td>
+                      <td
+                        data-label="Monto"
+                        className={`user-transactions__amount user-transactions__amount--${txn.type}`}
+                      >
                         {formatAmount(txn.amount)}
                       </td>
                     </tr>
@@ -897,6 +1305,7 @@ export default function App() {
   const [isFetchingMe, setIsFetchingMe] = useState(false);
   const [isTopupProcessing, setIsTopupProcessing] = useState(false);
   const [userTransactions, setUserTransactions] = useState<UserTransaction[]>(USER_SAMPLE_TRANSACTIONS);
+  const [userView, setUserView] = useState<UserView>("balance");
 
   const logged = !!localStorage.getItem("token");
   const isAdmin = me?.is_admin ?? false;
@@ -960,6 +1369,9 @@ export default function App() {
         is_verified: data.is_verified,
       };
       setMe(profile);
+      if (profile.is_admin) {
+        setUserView("balance");
+      }
       return profile;
     } catch (error: unknown) {
       setMe(null);
@@ -1103,6 +1515,7 @@ export default function App() {
     setTickets([]);
     setMsg("Sesión cerrada");
     setUserTransactions(USER_SAMPLE_TRANSACTIONS);
+    setUserView("balance");
   }
 
   useEffect(() => {
@@ -1240,6 +1653,18 @@ export default function App() {
   }
 
   if (logged && me && !me.is_admin) {
+    if (userView === "stats") {
+      return <UserStats me={me} onLogout={logout} currentView={userView} onNavigate={(view) => setUserView(view)} />;
+    }
+
+    if (userView === "join") {
+      return <UserJoinGames me={me} onLogout={logout} currentView={userView} onNavigate={(view) => setUserView(view)} />;
+    }
+
+    if (userView === "create") {
+      return <UserCreateGame me={me} onLogout={logout} currentView={userView} onNavigate={(view) => setUserView(view)} />;
+    }
+
     return (
       <UserDashboard
         me={me}
@@ -1250,6 +1675,8 @@ export default function App() {
         transactions={userTransactions}
         message={msg}
         error={errors}
+        currentView={userView}
+        onNavigate={(view) => setUserView(view)}
       />
     );
   }
