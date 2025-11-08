@@ -170,6 +170,32 @@ export function UserGameRoomView({
           </aside>
         </section>
 
+        <section className="user-room-chat">
+          <h3 className="user-room-section-title">Chat en vivo</h3>
+          <ul className="user-room-chat-list">
+            {USER_ROOM_SAMPLE_CHAT.map((message) => (
+              <li key={message.id}>
+                <div className="user-room-chat__avatar" aria-hidden="true">
+                  {message.user.slice(0, 2).toUpperCase()}
+                </div>
+                <div>
+                  <p>
+                    <strong>{message.user}</strong>
+                    <span>{message.time}</span>
+                  </p>
+                  <div>{message.message}</div>
+                </div>
+              </li>
+            ))}
+          </ul>
+          <div className="user-room-chat-input">
+            <input type="text" placeholder="El chat estará activo pronto" disabled />
+            <button type="button" disabled>
+              Enviar
+            </button>
+          </div>
+        </section>
+
         <div className="user-room-toast">
           <p>Modo demo: pronto verás aquí tus logros en vivo.</p>
         </div>
