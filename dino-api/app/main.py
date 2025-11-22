@@ -73,7 +73,8 @@ async def _housekeeper():
                 session.commit()
         except Exception:
             # en producción, loguear stacktrace
-            pass
+            import traceback
+            traceback.print_exc()
         await asyncio.sleep(60)
 
 

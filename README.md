@@ -1,16 +1,28 @@
 ## Dino Bingo (Monorepo)
 
-### Desarrollo con un solo comando
-- En Windows (PowerShell): `./dev.ps1`
-- En Windows (CMD): `dev.bat`
+### Desarrollo
 
-El script:
-- Prepara el backend (crea `.venv` si hace falta e instala `requirements.txt`).
-- Instala dependencias del frontend si no existen.
-- Arranca API (`http://localhost:8000`) y web (`http://localhost:5173`).
+**Linux / macOS:**
+```bash
+./dev.sh
+```
+Este script preparará el entorno (Python venv, node_modules) y arrancará ambos servidores.
 
-Parámetros:
-- `./dev.ps1 -NoInstall` omite instalaciones (asume entornos ya listos).
+**Windows:**
+1. Backend:
+   ```powershell
+   cd dino-api
+   python -m venv .venv
+   .\.venv\Scripts\activate
+   pip install -r requirements.txt
+   uvicorn app.main:app --reload
+   ```
+2. Frontend:
+   ```powershell
+   cd dino-web
+   npm install
+   npm run dev
+   ```
 
 ### Estructura
 - `dino-api`: FastAPI + SQLModel (SQLite por defecto).

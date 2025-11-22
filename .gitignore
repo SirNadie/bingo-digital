@@ -1,0 +1,28 @@
+# General
+.DS_Store
+.vscode/
+.idea/
+*.log
+
+# Python (dino-api)
+dino-api/__pycache__/
+dino-api/*.py[cod]
+dino-api/.venv/
+dino-api/venv/
+dino-api/*.db
+dino-api/.env
+
+# Node (dino-web)
+dino-web/node_modules/
+dino-web/dist/
+dino-web/.env
+dino-web/.env.local
+dino-web/npm-debug.log*
+dino-web/yarn-debug.log*
+dino-web/yarn-error.log*
+
+# AI/Tools (Optional - uncomment if you want to ignore these)
+# .codexignore
+# .codexrc.json
+# codex.context.md
+# codex.rules.md
