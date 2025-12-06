@@ -1,28 +1,69 @@
 # General
 .DS_Store
+Thumbs.db
+*~
+*.log
+*.tmp
+
+# Editor/IDE directories
 .vscode/
 .idea/
-*.log
+*.swp
+*.swo
+*.sublime-project
+*.sublime-workspace
 
-# Python (dino-api)
-dino-api/__pycache__/
-dino-api/*.py[cod]
-dino-api/.venv/
-dino-api/venv/
-dino-api/*.db
-dino-api/.env
+# Python (Global)
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+.installed.cfg
+*.egg
+*.egg-info/
+.env
+.venv/
+venv/
+ENV/
+env/
+pythonenv*
 
-# Node (dino-web)
-dino-web/node_modules/
+# DB
+*.db
+*.sqlite3
+
+# Node / JS (Global)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+.npm/
+
+# Web App Specific
 dino-web/dist/
-dino-web/.env
+dino-web/build/
 dino-web/.env.local
-dino-web/npm-debug.log*
-dino-web/yarn-debug.log*
-dino-web/yarn-error.log*
+dino-web/.env.development.local
+dino-web/.env.test.local
+dino-web/.env.production.local
 
-# AI/Tools (Optional - uncomment if you want to ignore these)
-# .codexignore
-# .codexrc.json
-# codex.context.md
-# codex.rules.md
+# API Specific
+dino-api/.pytest_cache/
+dino-api/htmlcov/
+dino-api/.coverage

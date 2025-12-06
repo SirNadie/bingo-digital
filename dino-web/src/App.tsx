@@ -1,20 +1,19 @@
 import { useCallback, useEffect, useState } from "react";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import api from "./api/http";
-import AdminPanel from "./features/admin/AdminPanel";
-import { ADMIN_SAMPLE_TRANSACTIONS } from "./features/admin/constants";
 import LoginView from "./features/auth/LoginView";
 import UserApp from "./features/user/UserApp";
+import AdminPanel from "./features/admin/AdminPanel";
+import { ADMIN_SAMPLE_TRANSACTIONS } from "./features/admin/constants";
 import { Me } from "./types";
+import { ProtectedRoute } from "./components/auth/ProtectedRoute";
+import { Layout } from "./components/layout/Layout";
 
 export default function App() {
   const [me, setMe] = useState<Me | null>(null);
-  const [authMessage, setAuthMessage] = useState("");
-  const [authError, setAuthError] = useState("");
-  const [isFetchingMe, setIsFetchingMe] = useState(false);
-  const [isAuthenticating, setIsAuthenticating] = useState(false);
+  const [isFetchingMe, setIsFetchingMe] = useState(true);
 
   const fetchMe = useCallback(async (): Promise<Me | null> => {
-    setIsFetchingMe(true);
     try {
       const { data } = await api.get("/auth/me");
       const profile: Me = {
@@ -27,100 +26,63 @@ export default function App() {
       };
       setMe(profile);
       return profile;
-    } catch (error: unknown) {
+    } catch (error) {
+      localStorage.removeItem("token");
       setMe(null);
-      if (error && typeof error === "object" && "response" in error && (error as any).response?.status === 401) {
-        localStorage.removeItem("token");
-        setAuthMessage("La sesión expiró. Inicia sesión nuevamente.");
-      }
       return null;
     } finally {
       setIsFetchingMe(false);
     }
   }, []);
 
-  const login = useCallback(
-    async ({ email, password }: { email: string; password: string }) => {
-      setAuthError("");
-      setAuthMessage("");
-      if (!/.+@.+\..+/.test(email) || password.length < 6) {
-        setAuthError("Email o contraseña inválidos (min 6 caracteres)");
-        return;
-      }
-
-      try {
-        setIsAuthenticating(true);
-        const res = await api.post("/auth/login", { email, password });
-        localStorage.setItem("token", res.data.access_token);
-        setAuthMessage("Sesión iniciada");
-        await fetchMe();
-      } catch (error: unknown) {
-        if (error && typeof error === "object" && "response" in error && (error as any).response?.data) {
-          setAuthError((error as any).response.data as string);
-        } else {
-          setAuthError("No se pudo iniciar sesión, inténtalo de nuevo");
-        }
-      } finally {
-        setIsAuthenticating(false);
-      }
-    },
-    [fetchMe],
-  );
+  useEffect(() => {
+    fetchMe();
+  }, [fetchMe]);
 
   const logout = useCallback(() => {
     localStorage.removeItem("token");
     setMe(null);
-    setAuthMessage("");
-    setAuthError("");
+    window.location.href = "/auth";
   }, []);
 
-  const logged = Boolean(localStorage.getItem("token"));
-
-  useEffect(() => {
-    if (!logged) {
-      setMe(null);
-      return;
-    }
-    fetchMe();
-  }, [logged, fetchMe]);
-
-  useEffect(() => {
-    if (me) {
-      setAuthMessage("");
-      setAuthError("");
-    }
-  }, [me]);
-
-  if (!logged) {
-    return <LoginView onSubmit={login} error={authError} message={authMessage} isSubmitting={isAuthenticating} />;
-  }
-
-  if (logged && isFetchingMe && !me) {
+  if (isFetchingMe) {
     return (
-      <div className="auth-shell">
-        <div className="auth-card auth-card--loading">
-          <p className="auth-subtitle">Cargando perfil...</p>
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-12 h-12 border-4 border-primary/30 border-t-primary rounded-full animate-spin" />
+          <p className="text-white/60 font-display animate-pulse">Iniciando sistema...</p>
         </div>
       </div>
     );
   }
 
-  if (logged && me && me.is_admin) {
-    return <AdminPanel me={me} onLogout={logout} transactions={ADMIN_SAMPLE_TRANSACTIONS} />;
-  }
-
-  if (logged && me && !me.is_admin) {
-    return <UserApp me={me} onLogout={logout} onSessionRefresh={fetchMe} />;
-  }
-
   return (
-    <div className="auth-shell">
-      <div className="auth-card auth-card--loading">
-        <p className="auth-subtitle">No pudimos cargar tu panel, intenta de nuevo.</p>
-        <button type="button" className="auth-submit" onClick={logout}>
-          Cerrar sesión
-        </button>
-      </div>
-    </div>
+    <BrowserRouter>
+      <Routes>
+        {/* Public Route */}
+        <Route path="/auth" element={
+          !me ? <LoginView onLoginSuccess={fetchMe} /> : <Navigate to={me.is_admin ? "/admin" : "/"} replace />
+        } />
+
+        {/* User Routes */}
+        <Route element={<ProtectedRoute user={me} allowedRoles={['user']} />}>
+          <Route path="/" element={
+            me && <Layout user={me} onLogout={logout}>
+              <UserApp me={me} onLogout={logout} onSessionRefresh={fetchMe} />
+            </Layout>
+          } />
+        </Route>
+
+        {/* Admin Routes */}
+        <Route element={<ProtectedRoute user={me} allowedRoles={['admin']} />}>
+          <Route path="/admin" element={
+            me && <AdminPanel me={me} onLogout={logout} transactions={ADMIN_SAMPLE_TRANSACTIONS} />
+          } />
+        </Route>
+
+        {/* Catch all */}
+        <Route path="*" element={<Navigate to={me ? "/" : "/auth"} replace />} />
+      </Routes>
+    </BrowserRouter>
   );
 }
