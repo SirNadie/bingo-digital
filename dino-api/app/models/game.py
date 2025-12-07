@@ -8,7 +8,7 @@ class Game(SQLModel, table=True):
     id: str = Field(default_factory=lambda: str(uuid4()), primary_key=True)
     creator_id: str
     price: float
-    min_tickets: int = 10
+    min_tickets: int = 1
     status: str = "OPEN"  # CREATED | OPEN | READY | RUNNING | FINISHED | CANCELLED
     sold_tickets: int = 0
     created_at: datetime = Field(default_factory=datetime.utcnow)

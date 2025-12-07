@@ -3,12 +3,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.routers import auth, games
 from app.routers import tickets as tickets_router
 from app.routers import wallet as wallet_router
+from app.routers import websocket as websocket_router
 from app.core.config import CORS_ORIGINS
 from app.core.lifespan import lifespan
 
 app = FastAPI(
     title="Dino Bingo API", 
-    version="0.2.0",
+    version="0.3.0",
     lifespan=lifespan
 )
 
@@ -16,10 +17,14 @@ app = FastAPI(
 def health():
     return {"status": "ok"}
 
+# REST routers
 app.include_router(auth.router)
 app.include_router(games.router)
 app.include_router(tickets_router.router)
 app.include_router(wallet_router.router)
+
+# WebSocket router
+app.include_router(websocket_router.router)
 
 # CORS
 _allow_credentials = False if CORS_ORIGINS == ["*"] else True

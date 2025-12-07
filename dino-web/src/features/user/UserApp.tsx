@@ -1,11 +1,10 @@
 import { useEffect, useState } from "react";
 import api from "../../api/http";
+import toast from "react-hot-toast";
 import { formatCredits } from "../../utils/format";
 import {
-  JoinableGameCard,
   Me,
   UserTransaction,
-  UserTransactionType,
   UserView,
 } from "../../types";
 import {
@@ -29,16 +28,16 @@ export function UserApp({ me, onLogout, onSessionRefresh }: UserAppProps) {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [isTopupProcessing, setTopupProcessing] = useState(false);
-  const [activeJoinGame, setActiveJoinGame] = useState<JoinableGameCard | null>(null);
-  const [pendingTicketSelection, setPendingTicketSelection] = useState(false);
+
+  // Game room state
+  const [activeGameId, setActiveGameId] = useState<string | null>(null);
 
   useEffect(() => {
     setTransactions(USER_SAMPLE_TRANSACTIONS);
     setView("balance");
     setMessage("");
     setError("");
-    setActiveJoinGame(null);
-    setPendingTicketSelection(false);
+    setActiveGameId(null);
   }, [me.id]);
 
   const pushTransaction = (txn: UserTransaction) => {
@@ -55,7 +54,7 @@ export function UserApp({ me, onLogout, onSessionRefresh }: UserAppProps) {
     try {
       setTopupProcessing(true);
       const { data } = await api.post("/wallet/topup", { amount });
-      setMessage(`Saldo actualizado: ${formatCredits(data.balance)}`);
+      toast.success(`Saldo actualizado: ${formatCredits(data.balance)}`);
       await onSessionRefresh();
       pushTransaction({
         id: `TXU-${Date.now()}`,
@@ -65,15 +64,14 @@ export function UserApp({ me, onLogout, onSessionRefresh }: UserAppProps) {
         amount,
       });
     } catch (err: any) {
-      setMessage("");
-      setError(err?.response?.data || "Error al recargar");
+      toast.error(err?.response?.data?.detail || "Error al recargar");
     } finally {
       setTopupProcessing(false);
     }
   };
 
   const handleWithdrawal = () => {
-    setMessage("La solicitud de retiro estará disponible próximamente.");
+    toast("La solicitud de retiro estará disponible próximamente.");
     pushTransaction({
       id: `TXU-${Date.now()}-WD`,
       timestamp: new Date().toISOString(),
@@ -83,43 +81,37 @@ export function UserApp({ me, onLogout, onSessionRefresh }: UserAppProps) {
     });
   };
 
-  const handleJoinGame = (game: JoinableGameCard) => {
-    setActiveJoinGame(game);
-    setPendingTicketSelection(true);
+  const handleEnterRoom = (gameId: string) => {
+    setActiveGameId(gameId);
     setView("room");
   };
 
-  const handleLeaveGame = () => {
-    setActiveJoinGame(null);
-    setPendingTicketSelection(false);
+  const handleLeaveRoom = async () => {
+    setActiveGameId(null);
     setView("join");
+    // Refresh balance after leaving room
+    await onSessionRefresh();
   };
 
-  const handleConfirmTickets = (count: number) => {
-    setPendingTicketSelection(false);
-    setMessage(
-      `Has comprado ${count} cartón${count > 1 ? "es" : ""} por ${formatCredits((activeJoinGame?.price ?? 0) * count)}.`,
-    );
-  };
-
-  if (view === "room" && activeJoinGame) {
+  // Game Room View
+  if (view === "room" && activeGameId) {
     return (
       <UserGameRoomView
         me={me}
-        game={activeJoinGame}
-        onLeave={handleLeaveGame}
+        gameId={activeGameId}
+        onLeave={handleLeaveRoom}
         onLogout={onLogout}
         onNavigate={setView}
-        pendingTickets={pendingTicketSelection ? 1 : 0}
-        onConfirmTickets={handleConfirmTickets}
       />
     );
   }
 
+  // Stats View
   if (view === "stats") {
     return <UserStatsView me={me} onLogout={onLogout} currentView={view} onNavigate={setView} />;
   }
 
+  // Join Game View
   if (view === "join") {
     return (
       <UserJoinView
@@ -127,15 +119,17 @@ export function UserApp({ me, onLogout, onSessionRefresh }: UserAppProps) {
         onLogout={onLogout}
         currentView={view}
         onNavigate={setView}
-        onJoinGame={handleJoinGame}
+        onEnterRoom={handleEnterRoom}
       />
     );
   }
 
+  // Create Game View
   if (view === "create") {
     return <UserCreateView me={me} onLogout={onLogout} currentView={view} onNavigate={setView} />;
   }
 
+  // Default: Dashboard View
   return (
     <UserDashboardView
       me={me}

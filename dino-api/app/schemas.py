@@ -26,7 +26,7 @@ class Game(BaseModel):
     id: UUID
     creator_id: str
     price: float
-    min_tickets: int = 10
+    min_tickets: int = 1
     status: GameStatus = "OPEN"
     sold_tickets: int = 0
     prize_scheme: List[PrizeSlice] = [

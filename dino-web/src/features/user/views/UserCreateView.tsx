@@ -1,4 +1,7 @@
+import { useState } from "react";
+import toast from "react-hot-toast";
 import { Me, UserView } from "../../../types";
+import { useCreateGame } from "../../../hooks/useGames";
 import UserHeader from "../components/UserHeader";
 
 type UserCreateViewProps = {
@@ -9,6 +12,34 @@ type UserCreateViewProps = {
 };
 
 export function UserCreateView({ me, onLogout, currentView, onNavigate }: UserCreateViewProps) {
+  const [price, setPrice] = useState(1);
+  const [autostartEnabled, setAutostartEnabled] = useState(true);
+  const [autostartThreshold, setAutostartThreshold] = useState(10);
+
+  const createGame = useCreateGame();
+
+  const handleDecreasePrice = () => {
+    if (price > 0.5) setPrice(p => Math.round((p - 0.5) * 10) / 10);
+  };
+
+  const handleIncreasePrice = () => {
+    setPrice(p => Math.round((p + 0.5) * 10) / 10);
+  };
+
+  const handleCreate = () => {
+    createGame.mutate({
+      price,
+      autostart_enabled: autostartEnabled,
+      autostart_threshold: autostartEnabled ? autostartThreshold : undefined,
+    }, {
+      onSuccess: () => {
+        onNavigate("join");
+      }
+    });
+  };
+
+  const estimatedPool = price * autostartThreshold * 0.9; // 10% comisión
+
   return (
     <div className="user-create-shell">
       <UserHeader view={currentView} balance={me.balance} onNavigate={onNavigate} onLogout={onLogout} />
@@ -33,16 +64,23 @@ export function UserCreateView({ me, onLogout, currentView, onNavigate }: UserCr
               <article className="user-create-card">
                 <h3>Precio por cartón</h3>
                 <div className="user-create-price">
-                  <button type="button" aria-label="Disminuir precio">
+                  <button type="button" onClick={handleDecreasePrice} aria-label="Disminuir precio">
                     <span className="material-symbols-outlined" aria-hidden="true">
                       remove
                     </span>
                   </button>
                   <div className="user-create-price__input">
-                    <input type="number" min={0.5} step={0.5} value={0.5} readOnly aria-label="Precio del cartón" />
+                    <input
+                      type="number"
+                      min={0.5}
+                      step={0.5}
+                      value={price}
+                      onChange={(e) => setPrice(Math.max(0.5, parseFloat(e.target.value) || 0.5))}
+                      aria-label="Precio del cartón"
+                    />
                     <span>créditos</span>
                   </div>
-                  <button type="button" aria-label="Incrementar precio">
+                  <button type="button" onClick={handleIncreasePrice} aria-label="Incrementar precio">
                     <span className="material-symbols-outlined" aria-hidden="true">
                       add
                     </span>
@@ -52,21 +90,14 @@ export function UserCreateView({ me, onLogout, currentView, onNavigate }: UserCr
               </article>
 
               <article className="user-create-card">
-                <h3>Plantilla de premios</h3>
+                <h3>Distribución de premios</h3>
                 <div className="user-create-prizes">
-                  <button type="button" className="user-create-prize">
-                    <strong>1 Premio</strong>
-                    <span>Línea · 100% del pozo</span>
-                  </button>
-                  <button type="button" className="user-create-prize user-create-prize--active">
-                    <strong>2 Premios</strong>
-                    <span>Línea 40% · Bingo 60%</span>
-                  </button>
-                  <button type="button" className="user-create-prize">
+                  <div className="user-create-prize user-create-prize--active">
                     <strong>3 Premios</strong>
-                    <span>Línea 20% · Doble 30% · Bingo 50%</span>
-                  </button>
+                    <span>Diagonal 20% · Línea 20% · Bingo 50%</span>
+                  </div>
                 </div>
+                <p className="user-create-note">La comisión de la plataforma es del 10%.</p>
               </article>
 
               <article className="user-create-card">
@@ -74,26 +105,26 @@ export function UserCreateView({ me, onLogout, currentView, onNavigate }: UserCr
                 <div className="user-create-autostart">
                   <div className="user-create-autostart__row">
                     <div>
-                      <p>Iniciar por cartones vendidos</p>
-                      <span>La partida inicia al alcanzar un número de cartones.</span>
+                      <p>Mínimo de cartones para iniciar</p>
+                      <span>La partida podrá iniciarse al alcanzar este mínimo.</span>
                     </div>
                     <div className="user-create-autostart__controls">
-                      <input type="number" min={10} value={50} readOnly aria-label="Cartones para iniciar" />
-                      <input type="checkbox" checked readOnly aria-label="Activar inicio por cartones" />
-                    </div>
-                  </div>
-                  <div className="user-create-autostart__row">
-                    <div>
-                      <p>Iniciar por tiempo</p>
-                      <span>La partida inicia luego de un tiempo determinado.</span>
-                    </div>
-                    <div className="user-create-autostart__controls">
-                      <input type="number" value={0} readOnly aria-label="Minutos para iniciar" disabled />
-                      <input type="checkbox" aria-label="Activar inicio por tiempo" />
+                      <input
+                        type="number"
+                        min={2}
+                        value={autostartThreshold}
+                        onChange={(e) => setAutostartThreshold(Math.max(2, parseInt(e.target.value) || 10))}
+                        aria-label="Cartones mínimos para iniciar"
+                      />
+                      <input
+                        type="checkbox"
+                        checked={autostartEnabled}
+                        onChange={(e) => setAutostartEnabled(e.target.checked)}
+                        aria-label="Activar inicio automático"
+                      />
                     </div>
                   </div>
                 </div>
-                <p className="user-create-hint">La partida comenzará cuando se cumpla la primera condición alcanzada.</p>
               </article>
             </div>
           </section>
@@ -104,30 +135,40 @@ export function UserCreateView({ me, onLogout, currentView, onNavigate }: UserCr
               <ul>
                 <li>
                   <span>Precio / cartón</span>
-                  <strong>0.5 créditos</strong>
+                  <strong>{price} créditos</strong>
                 </li>
                 <li>
                   <span>Premios</span>
                   <div>
-                    <strong>Línea: 40%</strong>
-                    <strong>Bingo: 60%</strong>
+                    <strong>Diagonal: 20%</strong>
+                    <strong>Línea: 20%</strong>
+                    <strong>Bingo: 50%</strong>
                   </div>
                 </li>
                 <li>
-                  <span>Inicio automático</span>
-                  <strong>Por cartones</strong>
+                  <span>Mínimo cartones</span>
+                  <strong>{autostartThreshold}</strong>
                 </li>
                 <li>
-                  <span>Cartones máximos</span>
-                  <strong>Sin límite</strong>
+                  <span>Pozo estimado</span>
+                  <strong>{estimatedPool.toFixed(2)} créditos</strong>
                 </li>
               </ul>
             </article>
             <div className="user-create-actions">
-              <button type="button" className="user-create-actions__primary">
-                Crear partida
+              <button
+                type="button"
+                className="user-create-actions__primary"
+                onClick={handleCreate}
+                disabled={createGame.isPending}
+              >
+                {createGame.isPending ? "Creando..." : "Crear partida"}
               </button>
-              <button type="button" className="user-create-actions__secondary" onClick={() => onNavigate("balance")}>
+              <button
+                type="button"
+                className="user-create-actions__secondary"
+                onClick={() => onNavigate("balance")}
+              >
                 Cancelar
               </button>
             </div>

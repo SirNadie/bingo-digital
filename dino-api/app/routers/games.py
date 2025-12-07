@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException, BackgroundTasks
 from typing import Optional, List, Tuple
 from uuid import UUID
 
@@ -8,11 +8,13 @@ from app.schemas import Game as GameSchema, GameCreate, GameState, DrawResponse,
 from app.models.game import Game as GameModel
 from app.core.database import get_session
 from app.core.security import get_user_id_from_bearer
+from app.core.websocket import manager
 from app.models.user import User
 from app.models.ticket import Ticket as TicketModel
 from app.models.wallet import Wallet
 import json
 import random
+import asyncio
 from datetime import datetime
 
 
@@ -35,6 +37,19 @@ def _to_schema(m: GameModel) -> GameSchema:
         status=m.status,
         sold_tickets=m.sold_tickets,
     )
+
+
+def _broadcast_sync(game_id: str, event_type: str, data: dict):
+    """Run async broadcast in sync context."""
+    try:
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            asyncio.create_task(manager.broadcast_to_game(game_id, event_type, data))
+        else:
+            loop.run_until_complete(manager.broadcast_to_game(game_id, event_type, data))
+    except RuntimeError:
+        # No event loop available
+        asyncio.run(manager.broadcast_to_game(game_id, event_type, data))
 
 
 @router.get("", response_model=dict)
@@ -90,6 +105,50 @@ def start_game(game_id: str, user_id: str = Depends(auth), session: Session = De
     session.add(g)
     session.commit()
     session.refresh(g)
+    
+    # Broadcast game started
+    _broadcast_sync(game_id, "game_started", {
+        "game_id": game_id,
+        "status": g.status
+    })
+    
+    return _to_schema(g)
+
+
+@router.post("/{game_id}/cancel", response_model=GameSchema)
+def cancel_game(game_id: str, user_id: str = Depends(auth), session: Session = Depends(get_session)):
+    """Cancel a game. Only the creator can cancel. Refunds all ticket buyers."""
+    g = session.get(GameModel, game_id)
+    if not g:
+        raise HTTPException(status_code=404, detail="Juego no encontrado")
+    if g.creator_id != user_id:
+        raise HTTPException(status_code=403, detail="Solo el creador puede cancelar la partida")
+    if g.status not in ("OPEN", "READY"):
+        raise HTTPException(status_code=409, detail="No se puede cancelar una partida en curso o finalizada")
+    
+    # Refund all tickets
+    tickets = session.exec(select(TicketModel).where(TicketModel.game_id == g.id)).all()
+    for t in tickets:
+        if not t.refunded:
+            wallet = session.exec(select(Wallet).where(Wallet.user_id == t.user_id)).first()
+            if wallet:
+                wallet.balance = float(wallet.balance or 0) + float(g.price)
+                session.add(wallet)
+            t.refunded = True
+            session.add(t)
+    
+    g.status = "CANCELLED"
+    session.add(g)
+    session.commit()
+    session.refresh(g)
+    
+    # Broadcast cancellation
+    _broadcast_sync(game_id, "game_cancelled", {
+        "game_id": game_id,
+        "status": g.status,
+        "refunded_tickets": len(tickets)
+    })
+    
     return _to_schema(g)
 
 
@@ -126,25 +185,25 @@ def _ticket_grid(t: TicketModel) -> List[List[int]]:
 
 
 def _has_any_diagonal(grid: List[List[int]], drawn: set[int]) -> bool:
-    diag1 = all(grid[i][i] in drawn for i in range(5))
-    diag2 = all(grid[i][4-i] in drawn for i in range(5))
+    diag1 = all(grid[i][i] in drawn or grid[i][i] == 0 for i in range(5))
+    diag2 = all(grid[i][4-i] in drawn or grid[i][4-i] == 0 for i in range(5))
     return diag1 or diag2
 
 
 def _has_any_line(grid: List[List[int]], drawn: set[int]) -> bool:
     # horizontal lines
     for i in range(5):
-        if all(grid[i][j] in drawn for j in range(5)):
+        if all(grid[i][j] in drawn or grid[i][j] == 0 for j in range(5)):
             return True
     # vertical lines
     for j in range(5):
-        if all(grid[i][j] in drawn for i in range(5)):
+        if all(grid[i][j] in drawn or grid[i][j] == 0 for i in range(5)):
             return True
     return False
 
 
 def _is_bingo(grid: List[List[int]], drawn: set[int]) -> bool:
-    return all(grid[i][j] in drawn for i in range(5) for j in range(5))
+    return all(grid[i][j] in drawn or grid[i][j] == 0 for i in range(5) for j in range(5))
 
 
 def _prize_pool(g: GameModel) -> Tuple[float, float, float]:
@@ -155,7 +214,9 @@ def _prize_pool(g: GameModel) -> Tuple[float, float, float]:
 
 
 def _default_scheme():
-    return {"DIAGONAL": 15, "LINE": 25, "BINGO": 60}
+    # 20% Diagonal, 20% Linea, 50% Bingo (90% of pool)
+    # 5% Creator + 5% System = 10% commission (already deducted in _prize_pool)
+    return {"DIAGONAL": 22.22, "LINE": 22.22, "BINGO": 55.56}  # Percentages of the 90% prize pool
 
 
 @router.get("/{game_id}/state", response_model=GameState)
@@ -254,4 +315,60 @@ def draw_number(game_id: str, user_id: str = Depends(auth), session: Session = D
     session.add(g)
     session.commit()
     session.refresh(g)
+    
+    # Broadcast number drawn
+    _broadcast_sync(game_id, "number_drawn", {
+        "number": num,
+        "drawn_numbers": drawn,
+        "paid_diagonal": g.paid_diagonal,
+        "paid_line": g.paid_line,
+        "paid_bingo": g.paid_bingo,
+    })
+    
+    # Broadcast winners
+    for w in winners:
+        _broadcast_sync(game_id, "winner", {
+            "ticket_id": w.ticket_id,
+            "user_id": w.user_id,
+            "amount": w.amount,
+            "category": w.category,
+        })
+    
+    # Broadcast game finished if needed
+    if g.status == "FINISHED":
+        _broadcast_sync(game_id, "game_finished", {
+            "game_id": game_id,
+            "status": g.status,
+        })
+    
     return DrawResponse(number=num, paid_diagonal=g.paid_diagonal, paid_line=g.paid_line, paid_bingo=g.paid_bingo, winners=winners)
+
+
+@router.get("/{game_id}/my-tickets")
+def my_tickets_for_game(game_id: str, user_id: str = Depends(auth), session: Session = Depends(get_session)):
+    """Get current user's tickets for a specific game."""
+    g = session.get(GameModel, game_id)
+    if not g:
+        raise HTTPException(status_code=404, detail="Juego no encontrado")
+    
+    tickets = session.exec(
+        select(TicketModel).where(
+            (TicketModel.game_id == game_id) & (TicketModel.user_id == user_id)
+        )
+    ).all()
+    
+    result = []
+    for t in tickets:
+        try:
+            nums = json.loads(t.numbers)
+        except Exception:
+            nums = []
+        result.append({
+            "id": t.id,
+            "game_id": t.game_id,
+            "numbers": nums,
+            "payout": t.payout,
+            "wins": json.loads(t.wins) if t.wins else [],
+        })
+    
+    return {"items": result}
