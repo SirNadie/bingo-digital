@@ -1,10 +1,20 @@
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useRef, useCallback } from "react";
 import toast from "react-hot-toast";
 import { Me, UserView } from "../../../types";
 import { formatCredits } from "../../../utils/format";
 import { useGameState, useMyTickets, useStartGame, useDrawNumber, useCancelGame } from "../../../hooks/useGames";
 import { useWebSocket } from "../../../hooks/useWebSocket";
 import UserHeader from "../components/UserHeader";
+
+// Helper to get BINGO letter based on number
+function getBingoLetter(num: number): string {
+  if (num >= 1 && num <= 15) return "B";
+  if (num >= 16 && num <= 30) return "I";
+  if (num >= 31 && num <= 45) return "N";
+  if (num >= 46 && num <= 60) return "G";
+  if (num >= 61 && num <= 75) return "O";
+  return "";
+}
 
 type UserGameRoomViewProps = {
   me: Me;
@@ -23,6 +33,45 @@ export function UserGameRoomView({
 }: UserGameRoomViewProps) {
   const [lastDrawnNumber, setLastDrawnNumber] = useState<number | null>(null);
   const [autoDrawEnabled, setAutoDrawEnabled] = useState(false);
+  const [soundEnabled, setSoundEnabled] = useState(false);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  // Base64 encoded short beep sound (simple wav)
+  const BEEP_SOUND = "data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdH2LkZWTh3lwY2Rxf46Wm5eLfnNpZXB/jpadl4x/dG1tcXyKl52blIZ6cW5xfIqWnZmSh3t0cXJ7iZSam5WJfXZzcnmGkZeXk4l9d3V0eIWPlJSTin54dnZ4g42SkZGKf3l3d3qCjJCQj4p/eXd4eYGKj4+Oi4B6eHl6gIiNjoyKgXt5eXqAh4uNjImBe3p6e4CGiouKiIF8enp7gIWIioiHgXx7e3yAhIeIh4aBfHt7fICEhoaFgn18fH2Ag4WFhIJ+fX1+gIOEhIOCfn5+f4GDg4OCgX9/f4CCgoKBgH9/gICBgYGAgICAgICAgICAgICAgA==";
+
+  // Enable sound - must be called from user interaction
+  const enableSound = useCallback(() => {
+    try {
+      // Create audio element and test play
+      const audio = new Audio(BEEP_SOUND);
+      audio.volume = 0.5;
+      audioRef.current = audio;
+
+      // Play immediately to unlock audio
+      audio.play().then(() => {
+        setSoundEnabled(true);
+        toast.success('🔊 Sonido activado');
+      }).catch((e) => {
+        console.error('Could not play audio:', e);
+        toast.error('No se pudo activar el sonido');
+      });
+    } catch (e) {
+      console.error('Could not enable sound:', e);
+      toast.error('No se pudo activar el sonido');
+    }
+  }, []);
+
+  // Play bingo ball sound effect
+  const playBallSound = useCallback(() => {
+    if (!soundEnabled) return;
+    try {
+      const audio = new Audio(BEEP_SOUND);
+      audio.volume = 0.5;
+      audio.play().catch(e => console.warn('Could not play sound:', e));
+    } catch (e) {
+      console.warn('Could not play sound:', e);
+    }
+  }, [soundEnabled]);
 
   // API hooks
   const { data: gameState, refetch: refetchState } = useGameState(gameId);
@@ -44,14 +93,26 @@ export function UserGameRoomView({
         case "number_drawn":
           const payload = msg.payload as { number: number };
           setLastDrawnNumber(payload.number);
+          playBallSound();
+          // Show notification with letter + number
+          const letter = getBingoLetter(payload.number);
+          toast(`🎱 ${letter}-${payload.number}`, {
+            duration: 2000,
+            style: {
+              background: 'linear-gradient(135deg, #00f0ff, #7c3aed)',
+              color: '#0a0a0f',
+              fontWeight: 'bold',
+              fontSize: '18px'
+            }
+          });
           refetchState();
           break;
         case "winner":
-          const winnerPayload = msg.payload as { user_id: string; category: string; amount: number };
+          const winnerPayload = msg.payload as { user_id: string; username: string; category: string; amount: number };
           if (winnerPayload.user_id === me.id) {
             toast.success(`¡Ganaste ${winnerPayload.category}! +${formatCredits(winnerPayload.amount)}`);
           } else {
-            toast(`¡Hay un ganador de ${winnerPayload.category}!`);
+            toast(`¡${winnerPayload.username} ganó ${winnerPayload.category}!`);
           }
           refetchState();
           break;
@@ -69,7 +130,8 @@ export function UserGameRoomView({
       }
     },
     onOpen: () => {
-      console.log("WebSocket connected to game", gameId);
+      onOpen: () => {
+      }
     }
   });
 
@@ -104,7 +166,12 @@ export function UserGameRoomView({
   };
 
   const handleDrawNumber = () => {
-    drawNumber.mutate(gameId);
+    drawNumber.mutate(gameId, {
+      onSuccess: () => {
+        // Play sound for creator too
+        playBallSound();
+      }
+    });
   };
 
   const handleCancelGame = () => {
@@ -172,6 +239,18 @@ export function UserGameRoomView({
             </p>
           </div>
           <div className="user-room-actions">
+            {/* Sound enable button */}
+            <button
+              type="button"
+              className={`user-room-button ${soundEnabled ? 'user-room-button--active' : 'user-room-button--secondary'}`}
+              onClick={enableSound}
+              disabled={soundEnabled}
+            >
+              <span className="material-symbols-outlined" aria-hidden="true">
+                {soundEnabled ? 'volume_up' : 'volume_off'}
+              </span>
+              {soundEnabled ? 'Sonido ON' : 'Activar sonido'}
+            </button>
             {canStart && (
               <button
                 type="button"
@@ -232,9 +311,20 @@ export function UserGameRoomView({
               <p>{formatCredits(pot)}</p>
             </div>
             <div className="user-room-stats">
-              <div className="user-room-stat">
+              <div className="user-room-stat user-room-stat--last-ball">
                 <p>Última bola</p>
-                <strong>{lastDrawnNumber || (gameState?.drawn_numbers?.slice(-1)[0]) || "-"}</strong>
+                <strong>
+                  {lastDrawnNumber || gameState?.drawn_numbers?.slice(-1)[0] ? (
+                    <>
+                      <span className="user-room-ball-letter">
+                        {getBingoLetter(lastDrawnNumber || gameState?.drawn_numbers?.slice(-1)[0] || 0)}
+                      </span>
+                      <span className="user-room-ball-number">
+                        {lastDrawnNumber || gameState?.drawn_numbers?.slice(-1)[0]}
+                      </span>
+                    </>
+                  ) : "-"}
+                </strong>
               </div>
               <div className={`user-room-stat ${gameState?.paid_diagonal ? 'user-room-stat--paid' : ''}`}>
                 <p>Diagonal {gameState?.paid_diagonal ? '✓' : ''}</p>

@@ -15,6 +15,15 @@ app = FastAPI(
     lifespan=lifespan
 )
 
+# CORS - Must be added before routers
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Allow all origins for development
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 @app.get("/health")
 def health():
     return {"status": "ok"}
@@ -29,13 +38,3 @@ app.include_router(admin_router.router)
 
 # WebSocket router
 app.include_router(websocket_router.router)
-
-# CORS
-_allow_credentials = False if CORS_ORIGINS == ["*"] else True
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=CORS_ORIGINS,
-    allow_credentials=_allow_credentials,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)

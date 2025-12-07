@@ -219,12 +219,12 @@ def get_admin_transactions(
         }
         
         result.append({
-            "id": txn.id[:12],
+            "id": txn.id,
             "user": user_name,
             "timestamp": txn.created_at.strftime("%Y-%m-%d %H:%M") if txn.created_at else "",
             "amount": txn.amount,
             "type": type_map.get(txn.type, "deposit"),
-            "status": "approved",  # All transactions in our system are approved
+            "status": txn.status or "pending",
         })
     
     return {"items": result}
@@ -285,3 +285,69 @@ def get_admin_activity(
         })
     
     return {"items": result}
+
+
+@router.post("/transactions/{txn_id}/approve")
+def approve_transaction(
+    txn_id: str,
+    admin: User = Depends(_admin_auth),
+    session: Session = Depends(get_session),
+):
+    """Approve a pending transaction."""
+    txn = session.get(Transaction, txn_id)
+    if not txn:
+        raise HTTPException(status_code=404, detail="Transacción no encontrada")
+    
+    if txn.status != "pending":
+        raise HTTPException(status_code=400, detail="La transacción no está pendiente")
+    
+    # Process approval based on type
+    if txn.type == "deposit":
+        # Credit user wallet
+        wallet = session.exec(select(Wallet).where(Wallet.user_id == txn.user_id)).first()
+        if wallet:
+            wallet.balance = float(wallet.balance or 0) + txn.amount
+            session.add(wallet)
+    
+    elif txn.type == "withdraw":
+        # Money was already deducted (reserved), so just mark approved
+        pass
+        
+    txn.status = "approved"
+    session.add(txn)
+    session.commit()
+    
+    return {"status": "approved"}
+
+
+@router.post("/transactions/{txn_id}/reject")
+def reject_transaction(
+    txn_id: str,
+    admin: User = Depends(_admin_auth),
+    session: Session = Depends(get_session),
+):
+    """Reject a pending transaction."""
+    txn = session.get(Transaction, txn_id)
+    if not txn:
+        raise HTTPException(status_code=404, detail="Transacción no encontrada")
+    
+    if txn.status != "pending":
+        raise HTTPException(status_code=400, detail="La transacción no está pendiente")
+    
+    # Process rejection based on type
+    if txn.type == "deposit":
+        # Just mark rejected, money was never added
+        pass
+    
+    elif txn.type == "withdraw":
+        # Refund the reserved money
+        wallet = session.exec(select(Wallet).where(Wallet.user_id == txn.user_id)).first()
+        if wallet:
+            wallet.balance = float(wallet.balance or 0) + abs(txn.amount)
+            session.add(wallet)
+            
+    txn.status = "rejected"
+    session.add(txn)
+    session.commit()
+    
+    return {"status": "rejected"}

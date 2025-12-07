@@ -16,6 +16,9 @@ type UserDashboardViewProps = {
   currentView: UserView;
   onNavigate: (view: UserView) => void;
   onEnterRoom: (gameId: string) => void;
+  onLoadMore: () => void;
+  hasMore: boolean;
+  isLoadingMore: boolean;
 };
 
 export function UserDashboardView({
@@ -30,6 +33,9 @@ export function UserDashboardView({
   currentView,
   onNavigate,
   onEnterRoom,
+  onLoadMore,
+  hasMore,
+  isLoadingMore,
 }: UserDashboardViewProps) {
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState<UserTransactionType | "all">("all");
@@ -48,15 +54,17 @@ export function UserDashboardView({
       })()
       : null;
 
-    return transactions.filter((txn) => {
-      const matchesType = typeFilter === "all" || txn.type === typeFilter;
-      const matchesSearch =
-        !search.trim() ||
-        txn.description.toLowerCase().includes(search.trim().toLowerCase()) ||
-        txn.id.toLowerCase().includes(search.trim().toLowerCase());
-      const matchesRange = !minDate || new Date(txn.timestamp) >= minDate;
-      return matchesType && matchesSearch && matchesRange;
-    });
+    return transactions
+      .filter((txn) => {
+        const matchesType = typeFilter === "all" || txn.type === typeFilter;
+        const matchesSearch =
+          !search.trim() ||
+          txn.description.toLowerCase().includes(search.trim().toLowerCase()) ||
+          txn.id.toLowerCase().includes(search.trim().toLowerCase());
+        const matchesRange = !minDate || new Date(txn.timestamp) >= minDate;
+        return matchesType && matchesSearch && matchesRange;
+      })
+      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
   }, [transactions, search, typeFilter, rangeFilter]);
 
   const balance = Number.isFinite(me.balance) ? me.balance : 0;
@@ -226,6 +234,26 @@ export function UserDashboardView({
                   value={search}
                   onChange={(event) => setSearch(event.target.value)}
                 />
+                {search && (
+                  <button
+                    type="button"
+                    onClick={() => setSearch("")}
+                    className="user-search-clear"
+                    style={{
+                      position: 'absolute',
+                      right: '12px',
+                      background: 'none',
+                      border: 'none',
+                      color: 'var(--text-secondary)',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center'
+                    }}
+                    aria-label="Limpiar búsqueda"
+                  >
+                    <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>close</span>
+                  </button>
+                )}
               </label>
               <select
                 className="user-select"
@@ -255,6 +283,7 @@ export function UserDashboardView({
               <thead>
                 <tr>
                   <th scope="col">Fecha</th>
+                  <th scope="col">Estado</th>
                   <th scope="col">Tipo</th>
                   <th scope="col">Descripción</th>
                   <th scope="col" className="user-transactions__amount-heading">
@@ -265,9 +294,34 @@ export function UserDashboardView({
               <tbody>
                 {filteredTransactions.map((txn) => {
                   const badge = typeBadge(txn.type);
+                  const statusColors = {
+                    pending: "var(--warning)",
+                    approved: "var(--success)",
+                    rejected: "var(--error)",
+                  };
+                  const statusLabels = {
+                    pending: "Pendiente",
+                    approved: "Aprobado",
+                    rejected: "Rechazado",
+                  };
                   return (
                     <tr key={txn.id}>
                       <td data-label="Fecha">{formatDate(txn.timestamp)}</td>
+                      <td data-label="Estado">
+                        <span style={{
+                          color: statusColors[txn.status || "approved"],
+                          fontWeight: "600",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "4px",
+                          fontSize: "0.9em"
+                        }}>
+                          {txn.status === "pending" && <span className="material-symbols-outlined" style={{ fontSize: "16px" }}>schedule</span>}
+                          {txn.status === "rejected" && <span className="material-symbols-outlined" style={{ fontSize: "16px" }}>cancel</span>}
+                          {txn.status === "approved" && <span className="material-symbols-outlined" style={{ fontSize: "16px" }}>check_circle</span>}
+                          {statusLabels[txn.status || "approved"]}
+                        </span>
+                      </td>
                       <td data-label="Tipo">
                         <span className={badge.className}>
                           <span className="material-symbols-outlined" aria-hidden="true">
@@ -293,6 +347,22 @@ export function UserDashboardView({
               </tbody>
             </table>
           </div>
+          {hasMore && (
+            <div style={{ marginTop: '1.5rem', display: 'flex', justifyContent: 'center' }}>
+              <button
+                type="button"
+                className="user-actions__secondary"
+                onClick={onLoadMore}
+                disabled={isLoadingMore}
+                style={{ maxWidth: '300px' }}
+              >
+                <span className="material-symbols-outlined" aria-hidden="true">
+                  {isLoadingMore ? "refresh" : "expand_more"}
+                </span>
+                {isLoadingMore ? "Cargando..." : "Cargar más movimientos"}
+              </button>
+            </div>
+          )}
         </section>
       </main>
     </div>

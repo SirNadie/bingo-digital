@@ -1,3 +1,12 @@
+// Common API error type for axios responses
+export type ApiError = {
+  response?: {
+    data?: {
+      detail?: string;
+    };
+  };
+};
+
 export type Game = {
   id: string;
   creator_id: string;
@@ -128,6 +137,7 @@ export type UserTransaction = {
   type: UserTransactionType;
   description: string;
   amount: number;
+  status: "pending" | "approved" | "rejected";
 };
 
 export type UserView = "balance" | "stats" | "join" | "create" | "room";

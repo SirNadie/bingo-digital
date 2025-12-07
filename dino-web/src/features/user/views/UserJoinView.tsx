@@ -64,8 +64,9 @@ export function UserJoinView({ me, onLogout, currentView, onNavigate, onEnterRoo
             onError: (error) => reject(error)
           });
         });
-      } catch (error: any) {
-        const message = error?.response?.data?.detail || "Error al comprar cartón";
+      } catch (error: unknown) {
+        const err = error as { response?: { data?: { detail?: string } } };
+        const message = err?.response?.data?.detail || "Error al comprar cartón";
         toast.error(message);
         setIsPurchasing(false);
         return;

@@ -17,4 +17,5 @@ class Transaction(SQLModel, table=True):
     amount: float  # positive for income, negative for expenses
     description: str
     reference_id: Optional[str] = None  # game_id, ticket_id, etc.
+    status: str = Field(default="pending")  # pending, approved, rejected
     created_at: datetime = Field(default_factory=datetime.utcnow, index=True)

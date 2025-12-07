@@ -64,16 +64,28 @@ def list_games(status: Optional[str] = None, session: Session = Depends(get_sess
 
 @router.get("/my-active", response_model=dict)
 def list_my_active_games(user_id: str = Depends(auth), session: Session = Depends(get_session)):
-    """Get games where the user has purchased tickets and the game is still active."""
+    """Get games where the user has purchased tickets OR is the creator, and the game is still active."""
     # Find tickets belonging to the user
     user_tickets = session.exec(
         select(TicketModel).where(TicketModel.user_id == user_id)
     ).all()
     
-    # Get unique game IDs
+    # Get unique game IDs from tickets
     game_ids = set(t.game_id for t in user_tickets)
     
-    # Get games that are active (not cancelled/finished)
+    # Also find games created by the user
+    created_games = session.exec(
+        select(GameModel).where(
+            (GameModel.creator_id == user_id) & 
+            (GameModel.status.in_(["OPEN", "RUNNING"]))
+        )
+    ).all()
+    
+    # Add created game IDs
+    for g in created_games:
+        game_ids.add(g.id)
+    
+    # Get all games that are active (not cancelled/finished)
     active_games = []
     for gid in game_ids:
         game = session.get(GameModel, gid)
@@ -113,7 +125,7 @@ def create_game(payload: GameCreate, user_id: str = Depends(auth), session: Sess
 
 
 @router.post("/{game_id}/start", response_model=GameSchema)
-def start_game(game_id: str, user_id: str = Depends(auth), session: Session = Depends(get_session)):
+async def start_game(game_id: str, user_id: str = Depends(auth), session: Session = Depends(get_session)):
     g = session.get(GameModel, game_id)
     if not g:
         raise HTTPException(status_code=404, detail="Juego no encontrado")
@@ -129,7 +141,7 @@ def start_game(game_id: str, user_id: str = Depends(auth), session: Session = De
     session.refresh(g)
     
     # Broadcast game started
-    _broadcast_sync(game_id, "game_started", {
+    await manager.broadcast_to_game(game_id, "game_started", {
         "game_id": game_id,
         "status": g.status
     })
@@ -138,7 +150,7 @@ def start_game(game_id: str, user_id: str = Depends(auth), session: Session = De
 
 
 @router.post("/{game_id}/cancel", response_model=GameSchema)
-def cancel_game(game_id: str, user_id: str = Depends(auth), session: Session = Depends(get_session)):
+async def cancel_game(game_id: str, user_id: str = Depends(auth), session: Session = Depends(get_session)):
     """Cancel a game. Only the creator can cancel. Refunds all ticket buyers."""
     g = session.get(GameModel, game_id)
     if not g:
@@ -174,7 +186,7 @@ def cancel_game(game_id: str, user_id: str = Depends(auth), session: Session = D
     session.refresh(g)
     
     # Broadcast cancellation
-    _broadcast_sync(game_id, "game_cancelled", {
+    await manager.broadcast_to_game(game_id, "game_cancelled", {
         "game_id": game_id,
         "status": g.status,
         "refunded_tickets": len(tickets)
@@ -268,7 +280,7 @@ def game_state(game_id: str, session: Session = Depends(get_session)):
 
 
 @router.post("/{game_id}/draw", response_model=DrawResponse)
-def draw_number(game_id: str, user_id: str = Depends(auth), session: Session = Depends(get_session)):
+async def draw_number(game_id: str, user_id: str = Depends(auth), session: Session = Depends(get_session)):
     g = session.get(GameModel, game_id)
     if not g:
         raise HTTPException(status_code=404, detail="Juego no encontrado")
@@ -341,7 +353,18 @@ def draw_number(game_id: str, user_id: str = Depends(auth), session: Session = D
                 winlist.append(category)
             t.wins = json.dumps(winlist)
             session.add(t)
-            winners.append(WinnerOut(ticket_id=t.id, user_id=t.user_id, amount=per_winner, category=category))
+            
+            # Fetch user for username
+            user = session.exec(select(User).where(User.id == t.user_id)).first()
+            username = user.alias if user and user.alias else (user.email.split('@')[0] if user else "Jugador")
+            
+            winners.append(WinnerOut(
+                ticket_id=t.id, 
+                user_id=t.user_id, 
+                username=username,
+                amount=per_winner, 
+                category=category
+            ))
         setattr(g, cat_flag_name, True)
 
     # Premiación: primero diagonales, luego líneas, y bingo cierra el juego
@@ -378,7 +401,7 @@ def draw_number(game_id: str, user_id: str = Depends(auth), session: Session = D
     session.refresh(g)
     
     # Broadcast number drawn
-    _broadcast_sync(game_id, "number_drawn", {
+    await manager.broadcast_to_game(game_id, "number_drawn", {
         "number": num,
         "drawn_numbers": drawn,
         "paid_diagonal": g.paid_diagonal,
@@ -388,16 +411,17 @@ def draw_number(game_id: str, user_id: str = Depends(auth), session: Session = D
     
     # Broadcast winners
     for w in winners:
-        _broadcast_sync(game_id, "winner", {
+        await manager.broadcast_to_game(game_id, "winner", {
             "ticket_id": w.ticket_id,
             "user_id": w.user_id,
+            "username": w.username,
             "amount": w.amount,
             "category": w.category,
         })
     
     # Broadcast game finished if needed
     if g.status == "FINISHED":
-        _broadcast_sync(game_id, "game_finished", {
+        await manager.broadcast_to_game(game_id, "game_finished", {
             "game_id": game_id,
             "status": g.status,
         })

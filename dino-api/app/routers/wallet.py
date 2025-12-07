@@ -28,15 +28,49 @@ def topup(payload: TopUpRequest, user_id: str = Depends(_auth), session: Session
         session.add(w)
         session.commit()
         session.refresh(w)
-    w.balance = float(w.balance or 0.0) + float(payload.amount)
-    session.add(w)
+    # w.balance = float(w.balance or 0.0) + float(payload.amount)
+    # session.add(w)
     
-    # Create transaction record
+    # Create transaction record as PENDING
     txn = Transaction(
         user_id=user_id,
         type="deposit",
         amount=payload.amount,
         description=f"Recarga de {payload.amount:.2f} créditos",
+        status="pending"
+    )
+    session.add(txn)
+    
+    session.commit()
+    session.refresh(w)
+    # Return current balance (unchanged until approved)
+    return TopUpResponse(balance=w.balance)
+
+
+class WithdrawRequest(TopUpRequest):
+    pass
+
+
+@router.post("/withdraw", response_model=TopUpResponse)
+def withdraw(payload: WithdrawRequest, user_id: str = Depends(_auth), session: Session = Depends(get_session)):
+    w = session.exec(select(Wallet).where(Wallet.user_id == user_id)).first()
+    if not w:
+        raise HTTPException(status_code=404, detail="Billetera no encontrada")
+    
+    if float(w.balance or 0) < payload.amount:
+        raise HTTPException(status_code=400, detail="Saldo insuficiente")
+
+    # Deduct immediately (reserve funds)
+    w.balance = float(w.balance) - float(payload.amount)
+    session.add(w)
+
+    # Create transaction record as PENDING
+    txn = Transaction(
+        user_id=user_id,
+        type="withdraw",
+        amount=-payload.amount,
+        description=f"Solicitud de retiro de {payload.amount:.2f} créditos",
+        status="pending"
     )
     session.add(txn)
     

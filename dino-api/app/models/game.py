@@ -16,6 +16,7 @@ class Game(SQLModel, table=True):
     autostart_enabled: bool = False
     autostart_threshold: Optional[int] = None
     autostart_delay_minutes: Optional[int] = None
+    reached_threshold_at: Optional[datetime] = None  # When autostart threshold was reached
     commission_percent: float = 10.0
 
     # Estado de sorteo y pago de premios

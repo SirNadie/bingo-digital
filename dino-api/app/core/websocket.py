@@ -30,6 +30,7 @@ class ConnectionManager:
             "type": event_type,
             "payload": data
         })
+        
         if game_id in self.active_connections:
             disconnected = set()
             for connection in self.active_connections[game_id]:

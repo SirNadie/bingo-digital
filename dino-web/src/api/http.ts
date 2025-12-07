@@ -1,5 +1,5 @@
 import axios, { InternalAxiosRequestConfig } from "axios";
-import type { UserTransaction, UserStats, AdminStats, AdminUser, AdminGame, AdminTransaction, AdminActivityItem } from "../types";
+import type { UserTransaction, UserStats } from "../types";
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL,
@@ -14,7 +14,7 @@ api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
   return config;
 });
 
-// Transaction API functions
+// User Transaction API functions
 export async function fetchTransactions(params?: {
   limit?: number;
   offset?: number;
@@ -32,32 +32,4 @@ export async function fetchUserStats(days?: number): Promise<UserStats> {
   return response.data;
 }
 
-// Admin API functions
-export async function fetchAdminStats(): Promise<AdminStats> {
-  const response = await api.get("/admin/stats");
-  return response.data;
-}
-
-export async function fetchAdminUsers(): Promise<{ items: AdminUser[] }> {
-  const response = await api.get("/admin/users");
-  return response.data;
-}
-
-export async function fetchAdminGames(): Promise<{ items: AdminGame[] }> {
-  const response = await api.get("/admin/games");
-  return response.data;
-}
-
-export async function fetchAdminTransactions(): Promise<{ items: AdminTransaction[] }> {
-  const response = await api.get("/admin/transactions");
-  return response.data;
-}
-
-export async function fetchAdminActivity(): Promise<{ items: AdminActivityItem[] }> {
-  const response = await api.get("/admin/activity");
-  return response.data;
-}
-
 export default api;
-
-

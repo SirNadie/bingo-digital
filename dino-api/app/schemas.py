@@ -78,6 +78,7 @@ PrizeCategory = Literal["DIAGONAL", "LINE", "BINGO"]
 class WinnerOut(BaseModel):
     ticket_id: str
     user_id: str
+    username: str
     amount: float
     category: PrizeCategory
 
@@ -104,7 +105,7 @@ class DrawResponse(BaseModel):
 
 
 # --- Transacciones y Estadísticas ---
-TransactionTypeLiteral = Literal["deposit", "withdraw", "purchase", "prize", "refund"]
+TransactionTypeLiteral = Literal["deposit", "withdraw", "purchase", "prize", "refund", "commission", "topup"]
 
 
 class TransactionOut(BaseModel):

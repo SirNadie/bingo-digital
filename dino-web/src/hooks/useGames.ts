@@ -1,6 +1,7 @@
 import api from '../api/http';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
+import type { ApiError } from '../types';
 
 // Types
 export interface Game {
@@ -126,7 +127,7 @@ export function useCreateGame() {
             queryClient.invalidateQueries({ queryKey: ['games'] });
             toast.success('¡Partida creada exitosamente!');
         },
-        onError: (error: any) => {
+        onError: (error: ApiError) => {
             const message = error.response?.data?.detail || 'Error al crear partida';
             toast.error(message);
         },
@@ -143,7 +144,7 @@ export function useStartGame() {
             queryClient.invalidateQueries({ queryKey: ['game-state', gameId] });
             toast.success('¡Partida iniciada!');
         },
-        onError: (error: any) => {
+        onError: (error: ApiError) => {
             const message = error.response?.data?.detail || 'Error al iniciar partida';
             toast.error(message);
         },
@@ -157,10 +158,9 @@ export function useDrawNumber() {
         mutationFn: drawNumber,
         onSuccess: (data, gameId) => {
             queryClient.invalidateQueries({ queryKey: ['game-state', gameId] });
-            // Winners are announced via WebSocket, but we can show the number
-            toast.success(`Número: ${data.number}`);
+            // Notification is handled by WebSocket for everyone (including creator)
         },
-        onError: (error: any) => {
+        onError: (error: ApiError) => {
             const message = error.response?.data?.detail || 'Error al sortear';
             toast.error(message);
         },
@@ -177,7 +177,7 @@ export function useBuyTicket() {
             queryClient.invalidateQueries({ queryKey: ['my-tickets', gameId] });
             toast.success('¡Cartón comprado!');
         },
-        onError: (error: any) => {
+        onError: (error: ApiError) => {
             const message = error.response?.data?.detail || 'Error al comprar cartón';
             toast.error(message);
         },
@@ -199,7 +199,7 @@ export function useCancelGame() {
             queryClient.invalidateQueries({ queryKey: ['game-state', gameId] });
             toast.success('Partida cancelada. Se reembolsaron los cartones.');
         },
-        onError: (error: any) => {
+        onError: (error: ApiError) => {
             const message = error.response?.data?.detail || 'Error al cancelar partida';
             toast.error(message);
         },

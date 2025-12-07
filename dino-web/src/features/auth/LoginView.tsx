@@ -25,8 +25,6 @@ export default function LoginView() {
     defaultValues: { alias: "", email: "", password: "" },
   });
 
-  const currentForm = isRegistering ? registerForm : loginForm;
-
   const handleSubmit = async (data: LoginFormData | RegisterFormData) => {
     setIsLoading(true);
 
@@ -40,8 +38,9 @@ export default function LoginView() {
         await login(loginData.email, loginData.password);
         toast.success("¡Bienvenido de vuelta!");
       }
-    } catch (err: any) {
-      const message = err.response?.data?.detail;
+    } catch (err: unknown) {
+      const error = err as { response?: { data?: { detail?: string } } };
+      const message = error.response?.data?.detail;
       toast.error(typeof message === 'string' ? message : "Error al procesar la solicitud");
     } finally {
       setIsLoading(false);
@@ -78,7 +77,7 @@ export default function LoginView() {
           </motion.div>
         </div>
 
-        <form onSubmit={currentForm.handleSubmit(handleSubmit)} className="space-y-5">
+        <form onSubmit={isRegistering ? registerForm.handleSubmit(handleSubmit) : loginForm.handleSubmit(handleSubmit)} className="space-y-5">
           {isRegistering && (
             <Input
               placeholder="Tu Alias (p.ej. Rex)"
@@ -95,7 +94,7 @@ export default function LoginView() {
             error={isRegistering
               ? registerForm.formState.errors.email?.message
               : loginForm.formState.errors.email?.message}
-            {...currentForm.register("email")}
+            {...(isRegistering ? registerForm.register("email") : loginForm.register("email"))}
           />
 
           <Input
@@ -105,7 +104,7 @@ export default function LoginView() {
             error={isRegistering
               ? registerForm.formState.errors.password?.message
               : loginForm.formState.errors.password?.message}
-            {...currentForm.register("password")}
+            {...(isRegistering ? registerForm.register("password") : loginForm.register("password"))}
           />
 
           <Button type="submit" variant="primary" className="w-full group" isLoading={isLoading}>
