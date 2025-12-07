@@ -12,6 +12,7 @@ from app.core.websocket import manager
 from app.models.user import User
 from app.models.ticket import Ticket as TicketModel
 from app.models.wallet import Wallet
+from app.models.transaction import Transaction
 import json
 import random
 import asyncio
@@ -59,6 +60,27 @@ def list_games(status: Optional[str] = None, session: Session = Depends(get_sess
         stmt = stmt.where(GameModel.status == status)
     items = session.exec(stmt).all()
     return {"items": [_to_schema(g) for g in items]}
+
+
+@router.get("/my-active", response_model=dict)
+def list_my_active_games(user_id: str = Depends(auth), session: Session = Depends(get_session)):
+    """Get games where the user has purchased tickets and the game is still active."""
+    # Find tickets belonging to the user
+    user_tickets = session.exec(
+        select(TicketModel).where(TicketModel.user_id == user_id)
+    ).all()
+    
+    # Get unique game IDs
+    game_ids = set(t.game_id for t in user_tickets)
+    
+    # Get games that are active (not cancelled/finished)
+    active_games = []
+    for gid in game_ids:
+        game = session.get(GameModel, gid)
+        if game and game.status in ("OPEN", "RUNNING"):
+            active_games.append(game)
+    
+    return {"items": [_to_schema(g) for g in active_games]}
 
 
 @router.post("", response_model=GameSchema, status_code=201)
@@ -134,6 +156,15 @@ def cancel_game(game_id: str, user_id: str = Depends(auth), session: Session = D
             if wallet:
                 wallet.balance = float(wallet.balance or 0) + float(g.price)
                 session.add(wallet)
+                # Create refund transaction
+                txn = Transaction(
+                    user_id=t.user_id,
+                    type="refund",
+                    amount=float(g.price),
+                    description=f"Reembolso por cancelación · Partida #{g.id[:8]}",
+                    reference_id=g.id,
+                )
+                session.add(txn)
             t.refunded = True
             session.add(t)
     
@@ -232,6 +263,7 @@ def game_state(game_id: str, session: Session = Depends(get_session)):
         paid_diagonal=g.paid_diagonal,
         paid_line=g.paid_line,
         paid_bingo=g.paid_bingo,
+        creator_id=g.creator_id,
     )
 
 
@@ -290,6 +322,15 @@ def draw_number(game_id: str, user_id: str = Depends(auth), session: Session = D
             if w:
                 w.balance = float(w.balance or 0.0) + per_winner
                 session.add(w)
+                # Create prize transaction
+                prize_txn = Transaction(
+                    user_id=t.user_id,
+                    type="prize",
+                    amount=per_winner,
+                    description=f"Premio {category} · Partida #{g.id[:8]}",
+                    reference_id=g.id,
+                )
+                session.add(prize_txn)
             # acumular payout y wins
             t.payout = float(t.payout or 0.0) + per_winner
             try:
@@ -311,6 +352,26 @@ def draw_number(game_id: str, user_id: str = Depends(auth), session: Session = D
     if g.paid_bingo:
         g.status = "FINISHED"
         g.finished_at = datetime.utcnow()
+        
+        # Distribute commission to the creator (5% of gross to creator, 5% stays as system revenue)
+        gross, commission, _ = _prize_pool(g)
+        creator_commission = commission * 0.5  # Half of 10% = 5% for creator
+        
+        if creator_commission > 0:
+            creator_wallet = session.exec(select(Wallet).where(Wallet.user_id == g.creator_id)).first()
+            if creator_wallet:
+                creator_wallet.balance = float(creator_wallet.balance or 0) + creator_commission
+                session.add(creator_wallet)
+                
+                # Create commission transaction for creator
+                commission_txn = Transaction(
+                    user_id=g.creator_id,
+                    type="commission",
+                    amount=creator_commission,
+                    description=f"Comisión de creador · Partida #{g.id[:8]}",
+                    reference_id=g.id,
+                )
+                session.add(commission_txn)
 
     session.add(g)
     session.commit()

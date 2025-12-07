@@ -27,9 +27,8 @@ export const ADMIN_VIEW_META: Record<AdminView, AdminViewMeta> = {
   dashboard: {
     eyebrow: "Panel en vivo",
     title: "Actividad general",
-    subtitle: "KPIs operativos y resumen de la plataforma.",
-    primaryAction: { label: "Sincronizar KPIs", icon: "refresh" },
-    secondaryAction: { label: "Exportar reporte", icon: "ios_share" },
+    subtitle: "Los datos se actualizan automáticamente.",
+    primaryAction: { label: "Exportar reporte", icon: "ios_share" },
   },
   transactions: {
     eyebrow: "Fondos en movimiento",

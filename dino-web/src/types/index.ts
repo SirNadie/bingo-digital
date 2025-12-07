@@ -33,6 +33,7 @@ export type GameState = {
   paid_diagonal: boolean;
   paid_line: boolean;
   paid_bingo: boolean;
+  creator_id: string;
 };
 
 export type AdminTransaction = {
@@ -94,6 +95,16 @@ export type AdminGame = {
   progress: number;
 };
 
+export type AdminStats = {
+  total_users: number;
+  active_games: number;
+  total_revenue: number;
+  today_transactions: number;
+  total_games_finished: number;
+  total_pot: number;
+  total_system_revenue: number;
+};
+
 export type AdminView = "dashboard" | "transactions" | "users" | "games";
 
 export type AdminViewAction = { label: string; icon: string };
@@ -109,7 +120,7 @@ export type AdminViewMeta = {
 export type AdminNavItem = { icon: string; label: string; view: AdminView };
 export type AdminSupportItem = { icon: string; label: string; action?: "logout" };
 
-export type UserTransactionType = "deposit" | "withdraw" | "purchase" | "prize";
+export type UserTransactionType = "deposit" | "withdraw" | "purchase" | "prize" | "refund" | "topup" | "commission";
 
 export type UserTransaction = {
   id: string;
@@ -120,6 +131,19 @@ export type UserTransaction = {
 };
 
 export type UserView = "balance" | "stats" | "join" | "create" | "room";
+
+export type UserStats = {
+  games_played: number;
+  games_won: number;
+  win_rate: number;
+  total_earned: number;
+  total_spent: number;
+  net_balance: number;
+  biggest_prize: number;
+  bingos_won: number;
+  lines_won: number;
+  diagonals_won: number;
+};
 
 export type JoinableGameCard = {
   id: string;

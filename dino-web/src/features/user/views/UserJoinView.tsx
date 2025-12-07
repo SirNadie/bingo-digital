@@ -85,7 +85,7 @@ export function UserJoinView({ me, onLogout, currentView, onNavigate, onEnterRoo
 
   return (
     <div className="user-join-shell">
-      <UserHeader view={currentView} balance={me.balance} onNavigate={onNavigate} onLogout={onLogout} />
+      <UserHeader view={currentView} balance={me.balance} userEmail={me.email} onNavigate={onNavigate} onLogout={onLogout} />
 
       <main className="user-join-main">
         <section className="user-join-header">
@@ -154,7 +154,9 @@ export function UserJoinView({ me, onLogout, currentView, onNavigate, onEnterRoo
                   </li>
                   <li>
                     <span>Premios</span>
-                    <strong>Diagonal 20% · Línea 20% · Bingo 50%</strong>
+                    <strong>
+                      Diagonal {formatCredits(calculatePot(game) * 0.2222)} · Línea {formatCredits(calculatePot(game) * 0.2222)} · Bingo {formatCredits(calculatePot(game) * 0.5556)}
+                    </strong>
                   </li>
                   <li>
                     <span>Estado</span>
@@ -173,13 +175,6 @@ export function UserJoinView({ me, onLogout, currentView, onNavigate, onEnterRoo
                     {game.creator_id === me.id ? "Entrar (Tu partida)" :
                       !canAfford(game, 1) ? "Saldo insuficiente" :
                         "Entrar a partida"}
-                  </button>
-                  <button
-                    type="button"
-                    className="user-join-secondary"
-                    onClick={() => onEnterRoom(game.id)}
-                  >
-                    Ver sala
                   </button>
                 </footer>
               </article>

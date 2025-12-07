@@ -4,15 +4,17 @@ import { formatCredits } from "../../../utils/format";
 type UserHeaderProps = {
   view: UserView;
   balance: number;
+  userEmail?: string;
   onNavigate: (view: UserView) => void;
   onLogout: () => void;
   roomMode?: boolean;
   onRequestExit?: () => void;
 };
 
-export function UserHeader({ view, balance, onNavigate, onLogout, roomMode, onRequestExit }: UserHeaderProps) {
+export function UserHeader({ view, balance, userEmail, onNavigate, onLogout, roomMode, onRequestExit }: UserHeaderProps) {
   const effectiveView = view === "stats" ? "stats" : "other";
   const formattedBalance = formatCredits(balance);
+  const displayName = userEmail ? userEmail.split("@")[0] : "";
 
   return (
     <header className="user-topbar">
@@ -57,7 +59,10 @@ export function UserHeader({ view, balance, onNavigate, onLogout, roomMode, onRe
               </span>
               <span className="user-balance-pill__label">{formattedBalance}</span>
             </button>
-            <div className="user-avatar" aria-hidden="true" />
+            <div className="user-profile">
+              <div className="user-avatar" aria-hidden="true" />
+              {displayName && <span className="user-profile__name">{displayName}</span>}
+            </div>
           </>
         )}
         <button
@@ -76,3 +81,4 @@ export function UserHeader({ view, balance, onNavigate, onLogout, roomMode, onRe
 }
 
 export default UserHeader;
+

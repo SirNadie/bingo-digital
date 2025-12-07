@@ -22,6 +22,7 @@ export interface GameState {
     paid_diagonal: boolean;
     paid_line: boolean;
     paid_bingo: boolean;
+    creator_id: string;
 }
 
 export interface CreateGamePayload {
@@ -82,7 +83,20 @@ export function useGames(status?: string) {
     return useQuery({
         queryKey: ['games', status],
         queryFn: () => fetchGames(status),
-        refetchInterval: 10000, // Refetch every 10 seconds
+        refetchInterval: 5000, // Refetch every 5 seconds
+    });
+}
+
+async function fetchMyActiveGames(): Promise<{ items: Game[] }> {
+    const { data } = await api.get('/games/my-active');
+    return data;
+}
+
+export function useMyActiveGames() {
+    return useQuery({
+        queryKey: ['my-active-games'],
+        queryFn: fetchMyActiveGames,
+        refetchInterval: 5000, // Refetch every 5 seconds
     });
 }
 

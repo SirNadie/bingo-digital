@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { Me, UserTransaction, UserTransactionType, UserView } from "../../../types";
 import { formatCredits } from "../../../utils/format";
+import { useMyActiveGames, Game } from "../../../hooks/useGames";
 import UserHeader from "../components/UserHeader";
 
 type UserDashboardViewProps = {
@@ -14,6 +15,7 @@ type UserDashboardViewProps = {
   error: string;
   currentView: UserView;
   onNavigate: (view: UserView) => void;
+  onEnterRoom: (gameId: string) => void;
 };
 
 export function UserDashboardView({
@@ -27,20 +29,23 @@ export function UserDashboardView({
   error,
   currentView,
   onNavigate,
+  onEnterRoom,
 }: UserDashboardViewProps) {
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState<UserTransactionType | "all">("all");
   const [rangeFilter, setRangeFilter] = useState("30");
   const [depositAmount, setDepositAmount] = useState(50);
 
+  const { data: myActiveGames } = useMyActiveGames();
+
   const filteredTransactions = useMemo(() => {
     const threshold = rangeFilter === "all" ? null : Number.parseInt(rangeFilter, 10);
     const minDate = threshold
       ? (() => {
-          const d = new Date();
-          d.setDate(d.getDate() - threshold);
-          return d;
-        })()
+        const d = new Date();
+        d.setDate(d.getDate() - threshold);
+        return d;
+      })()
       : null;
 
     return transactions.filter((txn) => {
@@ -69,10 +74,16 @@ export function UserDashboardView({
     switch (type) {
       case "deposit":
         return { icon: "arrow_upward", label: "Depósito", className: "user-chip user-chip--deposit" };
+      case "topup":
+        return { icon: "add_circle", label: "Recarga", className: "user-chip user-chip--deposit" };
       case "withdraw":
         return { icon: "arrow_downward", label: "Retiro", className: "user-chip user-chip--withdraw" };
       case "prize":
         return { icon: "emoji_events", label: "Premio", className: "user-chip user-chip--prize" };
+      case "refund":
+        return { icon: "replay", label: "Reembolso", className: "user-chip user-chip--refund" };
+      case "commission":
+        return { icon: "payments", label: "Comisión", className: "user-chip user-chip--commission" };
       case "purchase":
       default:
         return { icon: "shopping_cart", label: "Compra", className: "user-chip user-chip--purchase" };
@@ -81,7 +92,7 @@ export function UserDashboardView({
 
   return (
     <div className="user-shell">
-      <UserHeader view={currentView} balance={balance} onNavigate={onNavigate} onLogout={onLogout} />
+      <UserHeader view={currentView} balance={balance} userEmail={me.email} onNavigate={onNavigate} onLogout={onLogout} />
 
       <main className="user-main">
         <section className="user-quick-actions">
@@ -98,6 +109,40 @@ export function UserDashboardView({
             Crear partida
           </button>
         </section>
+
+        {/* My Active Games Section */}
+        {myActiveGames?.items && myActiveGames.items.length > 0 && (
+          <section className="user-active-games">
+            <h3>Mis partidas activas</h3>
+            <div className="user-active-games__grid">
+              {myActiveGames.items.map((game: Game) => (
+                <div key={game.id} className="user-active-games__card">
+                  <div className="user-active-games__info">
+                    <p className="user-active-games__id">Sala #{game.id.slice(0, 8)}</p>
+                    <p className="user-active-games__status">
+                      <span className={`user-active-games__badge user-active-games__badge--${game.status.toLowerCase()}`}>
+                        {game.status === "OPEN" ? "Esperando" :
+                          game.status === "RUNNING" ? "En curso" : game.status}
+                      </span>
+                    </p>
+                  </div>
+                  <div className="user-active-games__details">
+                    <span>{formatCredits(game.price)} / cartón</span>
+                    <span>{game.sold_tickets} cartones</span>
+                  </div>
+                  <button
+                    type="button"
+                    className="user-active-games__enter"
+                    onClick={() => onEnterRoom(game.id)}
+                  >
+                    <span className="material-symbols-outlined" aria-hidden="true">login</span>
+                    Entrar
+                  </button>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
 
         {(error || message) && (
           <div className="user-alerts">
@@ -192,6 +237,9 @@ export function UserDashboardView({
                 <option value="withdraw">Retiros</option>
                 <option value="purchase">Compras</option>
                 <option value="prize">Premios</option>
+                <option value="refund">Reembolsos</option>
+                <option value="commission">Comisiones</option>
+                <option value="topup">Recargas</option>
               </select>
               <select className="user-select" value={rangeFilter} onChange={(event) => setRangeFilter(event.target.value)}>
                 <option value="30">Últimos 30 días</option>

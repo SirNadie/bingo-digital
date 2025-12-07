@@ -5,6 +5,7 @@ from sqlmodel import Session, select
 from app.core.database import get_session
 from app.core.security import get_user_id_from_bearer
 from app.models.wallet import Wallet
+from app.models.transaction import Transaction
 from app.schemas import TopUpRequest, TopUpResponse
 
 
@@ -29,7 +30,18 @@ def topup(payload: TopUpRequest, user_id: str = Depends(_auth), session: Session
         session.refresh(w)
     w.balance = float(w.balance or 0.0) + float(payload.amount)
     session.add(w)
+    
+    # Create transaction record
+    txn = Transaction(
+        user_id=user_id,
+        type="deposit",
+        amount=payload.amount,
+        description=f"Recarga de {payload.amount:.2f} créditos",
+    )
+    session.add(txn)
+    
     session.commit()
     session.refresh(w)
     return TopUpResponse(balance=w.balance)
+
 

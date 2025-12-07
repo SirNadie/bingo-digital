@@ -1,28 +1,77 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import { formatCredits } from "../../utils/format";
 import {
-  ADMIN_ACTIVITY_ITEMS,
   ADMIN_NAV_ITEMS,
-  ADMIN_SAMPLE_GAMES,
-  ADMIN_SAMPLE_USERS,
   ADMIN_SUPPORT_ITEMS,
-  ADMIN_USER_METRICS,
   ADMIN_VIEW_META,
 } from "./constants";
-import { AdminTransaction, AdminView, Me } from "../../types";
+import { AdminTransaction, AdminView, Me, AdminStats, AdminUser, AdminGame, AdminActivityItem } from "../../types";
+import {
+  fetchAdminStats,
+  fetchAdminUsers,
+  fetchAdminGames,
+  fetchAdminTransactions,
+  fetchAdminActivity,
+} from "../../api/http";
 
 type AdminPanelProps = {
   me: Me;
-  transactions: AdminTransaction[];
   onLogout: () => void;
 };
 
-export function AdminPanel({ me, transactions, onLogout }: AdminPanelProps) {
+export function AdminPanel({ me, onLogout }: AdminPanelProps) {
   const [view, setView] = useState<AdminView>("dashboard");
   const [isSidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [isSidebarOpen, setSidebarOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [search, setSearch] = useState("");
+
+  // Real data state
+  const [stats, setStats] = useState<AdminStats | null>(null);
+  const [users, setUsers] = useState<AdminUser[]>([]);
+  const [games, setGames] = useState<AdminGame[]>([]);
+  const [transactions, setTransactions] = useState<AdminTransaction[]>([]);
+  const [activity, setActivity] = useState<AdminActivityItem[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  // Load all admin data
+  const loadData = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      const [statsData, usersData, gamesData, txnData, activityData] = await Promise.all([
+        fetchAdminStats(),
+        fetchAdminUsers(),
+        fetchAdminGames(),
+        fetchAdminTransactions(),
+        fetchAdminActivity(),
+      ]);
+      setStats(statsData);
+      setUsers(usersData.items.map((u: any) => ({
+        ...u,
+        lastSeen: u.last_seen,
+        gamesPlayed: u.games_played,
+      })));
+      setGames(gamesData.items.map((g: any) => ({
+        ...g,
+        buyIn: g.buy_in,
+      })));
+      setTransactions(txnData.items);
+      setActivity(activityData.items);
+    } catch (err) {
+      console.error("Error loading admin data:", err);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  // Load data on mount and poll every 10 seconds for real-time updates
+  useEffect(() => {
+    loadData();
+    const interval = setInterval(() => {
+      loadData();
+    }, 10000); // 10 seconds
+    return () => clearInterval(interval);
+  }, [loadData]);
 
   const filteredTransactions = useMemo(() => {
     if (!search.trim()) return transactions;
@@ -165,10 +214,10 @@ export function AdminPanel({ me, transactions, onLogout }: AdminPanelProps) {
                   item.action === "logout"
                     ? handleLogout
                     : () => {
-                        if (isMobile) {
-                          setSidebarOpen(false);
-                        }
+                      if (isMobile) {
+                        setSidebarOpen(false);
                       }
+                    }
                 }
               >
                 <span className="material-symbols-outlined" aria-hidden="true">
@@ -237,7 +286,7 @@ export function AdminPanel({ me, transactions, onLogout }: AdminPanelProps) {
             </div>
           </header>
 
-          {view === "dashboard" && <AdminDashboardView totalTransactions={totalTransactions} />}
+          {view === "dashboard" && <AdminDashboardView stats={stats} activity={activity} isLoading={isLoading} />}
 
           {view === "transactions" && (
             <AdminTransactionsView
@@ -250,9 +299,9 @@ export function AdminPanel({ me, transactions, onLogout }: AdminPanelProps) {
             />
           )}
 
-          {view === "users" && <AdminUsersView />}
+          {view === "users" && <AdminUsersView users={users} isLoading={isLoading} />}
 
-          {view === "games" && <AdminGamesView />}
+          {view === "games" && <AdminGamesView games={games} isLoading={isLoading} />}
         </div>
       </main>
     </div>
@@ -260,10 +309,12 @@ export function AdminPanel({ me, transactions, onLogout }: AdminPanelProps) {
 }
 
 type AdminDashboardViewProps = {
-  totalTransactions: number;
+  stats: import("../../types").AdminStats | null;
+  activity: import("../../types").AdminActivityItem[];
+  isLoading: boolean;
 };
 
-const AdminDashboardView = ({ totalTransactions }: AdminDashboardViewProps) => (
+const AdminDashboardView = ({ stats, activity, isLoading }: AdminDashboardViewProps) => (
   <>
     <section className="admin-chipbar" aria-label="Filtros temporales">
       <button type="button" className="admin-chip admin-chip--active">
@@ -291,8 +342,8 @@ const AdminDashboardView = ({ totalTransactions }: AdminDashboardViewProps) => (
           </span>
           <p>Usuarios totales</p>
         </header>
-        <strong>12,456</strong>
-        <span className="admin-metric__trend admin-metric__trend--up">+2.5%</span>
+        <strong>{isLoading ? "..." : (stats?.total_users?.toLocaleString() ?? 0)}</strong>
+        <span className="admin-metric__trend admin-metric__trend--neutral">Total</span>
       </article>
       <article className="admin-card admin-card--metric">
         <header>
@@ -301,8 +352,8 @@ const AdminDashboardView = ({ totalTransactions }: AdminDashboardViewProps) => (
           </span>
           <p>Partidas activas</p>
         </header>
-        <strong>87</strong>
-        <span className="admin-metric__trend admin-metric__trend--up">+5.1%</span>
+        <strong>{isLoading ? "..." : (stats?.active_games ?? 0)}</strong>
+        <span className="admin-metric__trend admin-metric__trend--neutral">En vivo</span>
       </article>
       <article className="admin-card admin-card--metric">
         <header>
@@ -311,8 +362,8 @@ const AdminDashboardView = ({ totalTransactions }: AdminDashboardViewProps) => (
           </span>
           <p>Ingresos totales</p>
         </header>
-        <strong>{formatCredits(98230)}</strong>
-        <span className="admin-metric__trend admin-metric__trend--up">+10.2%</span>
+        <strong>{isLoading ? "..." : formatCredits(stats?.total_revenue ?? 0)}</strong>
+        <span className="admin-metric__trend admin-metric__trend--neutral">Depósitos</span>
       </article>
       <article className="admin-card admin-card--metric">
         <header>
@@ -321,7 +372,7 @@ const AdminDashboardView = ({ totalTransactions }: AdminDashboardViewProps) => (
           </span>
           <p>Movimientos hoy</p>
         </header>
-        <strong>{totalTransactions}</strong>
+        <strong>{isLoading ? "..." : (stats?.today_transactions ?? 0)}</strong>
         <span className="admin-metric__trend admin-metric__trend--neutral">Resumen</span>
       </article>
     </section>
@@ -329,47 +380,39 @@ const AdminDashboardView = ({ totalTransactions }: AdminDashboardViewProps) => (
     <section className="admin-grid">
       <article className="admin-card admin-card--chart">
         <header>
-          <p className="admin-card__title">Ingresos plataforma (30 días)</p>
+          <p className="admin-card__title">Resumen de plataforma</p>
           <div className="admin-card__summary">
-            <strong>{formatCredits(45890)}</strong>
-            <span className="admin-metric__trend admin-metric__trend--up">+12.5%</span>
+            <strong>{formatCredits(stats?.total_pot ?? 0)}</strong>
+            <span className="admin-metric__trend admin-metric__trend--neutral">Pozo total</span>
           </div>
         </header>
-        <p className="admin-card__caption">Comparativa semanal</p>
-        <div className="admin-chart admin-chart--line" aria-hidden="true">
-          <svg viewBox="-3 0 478 150" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Evolución de ingresos">
-            <defs>
-              <linearGradient id="revenueGradient" x1="236" x2="236" y1="1" y2="149" gradientUnits="userSpaceOnUse">
-                <stop stopColor="#13ec5b" stopOpacity="0.3" />
-                <stop offset="1" stopColor="#13ec5b" stopOpacity="0" />
-              </linearGradient>
-            </defs>
-            <path
-              d="M0 109C18.1538 109 18.1538 21 36.3077 21C54.4615 21 54.4615 41 72.6154 41C90.7692 41 90.7692 93 108.923 93C127.077 93 127.077 33 145.231 33C163.385 33 163.385 101 181.538 101C199.692 101 199.692 61 217.846 61C236 61 236 45 254.154 45C272.308 45 272.308 121 290.462 121C308.615 121 308.615 149 326.769 149C344.923 149 344.923 1 363.077 1C381.231 1 381.231 81 399.385 81C417.538 81 417.538 129 435.692 129C453.846 129 453.846 25 472 25V149H326.769H0V109Z"
-              fill="url(#revenueGradient)"
-            />
-            <path
-              d="M0 109C18.1538 109 18.1538 21 36.3077 21C54.4615 21 54.4615 41 72.6154 41C90.7692 41 90.7692 93 108.923 93C127.077 93 127.077 33 145.231 33C163.385 33 163.385 101 181.538 101C199.692 101 199.692 61 217.846 61C236 61 236 45 254.154 45C272.308 45 272.308 121 290.462 121C308.615 121 308.615 149 326.769 149C344.923 149 344.923 1 363.077 1C381.231 1 381.231 81 399.385 81C417.538 81 417.538 129 435.692 129C453.846 129 453.846 25 472 25"
-              strokeWidth="3"
-              stroke="currentColor"
-              className="admin-chart__line"
-              strokeLinecap="round"
-            />
-          </svg>
+        <p className="admin-card__caption">Estadísticas generales</p>
+        <div className="admin-stats-summary">
+          <div className="admin-stat-item">
+            <span className="material-symbols-outlined" aria-hidden="true">sports_esports</span>
+            <div>
+              <p>Partidas finalizadas</p>
+              <strong>{stats?.total_games_finished ?? 0}</strong>
+            </div>
+          </div>
+          <div className="admin-stat-item">
+            <span className="material-symbols-outlined" style={{ color: "var(--color-primary)" }} aria-hidden="true">account_balance</span>
+            <div>
+              <p>Ingresos Sistema</p>
+              <strong>{formatCredits(stats?.total_system_revenue ?? 0)}</strong>
+            </div>
+          </div>
         </div>
-        <ul className="admin-chart__ticks">
-          <li>Semana 1</li>
-          <li>Semana 2</li>
-          <li>Semana 3</li>
-          <li>Semana 4</li>
-        </ul>
       </article>
       <article className="admin-card admin-card--activity">
         <header>
           <p className="admin-card__title">Actividad reciente</p>
         </header>
         <ul className="admin-activity">
-          {ADMIN_ACTIVITY_ITEMS.slice(0, 20).map((item) => (
+          {activity.length === 0 && !isLoading && (
+            <li className="admin-activity__empty">No hay actividad reciente</li>
+          )}
+          {activity.slice(0, 10).map((item) => (
             <li key={item.id}>
               <div className={`admin-activity__icon admin-activity__icon--${item.tone}`}>
                 <span className="material-symbols-outlined" aria-hidden="true">
@@ -378,7 +421,7 @@ const AdminDashboardView = ({ totalTransactions }: AdminDashboardViewProps) => (
               </div>
               <div className="admin-activity__content">
                 <p>
-                  {item.description} <strong>{item.title}</strong>
+                  <strong>{item.title}</strong> {item.description}
                 </p>
                 <time>{item.time}</time>
               </div>
@@ -502,27 +545,28 @@ const AdminTransactionsView = ({
   </section>
 );
 
-const AdminUsersView = () => (
+type AdminUsersViewProps = {
+  users: import("../../types").AdminUser[];
+  isLoading: boolean;
+};
+
+const AdminUsersView = ({ users, isLoading }: AdminUsersViewProps) => (
   <>
     <section className="admin-metrics admin-metrics--users">
-      {ADMIN_USER_METRICS.map((metric) => (
-        <article key={metric.label} className="admin-card admin-card--metric admin-card--metricCompact">
-          <header>
-            <span className="material-symbols-outlined" aria-hidden="true">
-              {metric.icon}
-            </span>
-            <p>{metric.label}</p>
-          </header>
-          <strong>{metric.value}</strong>
-          <span className={`admin-metric__trend admin-metric__trend--${metric.tone}`}>{metric.trend}</span>
-        </article>
-      ))}
+      <article className="admin-card admin-card--metric admin-card--metricCompact">
+        <header>
+          <span className="material-symbols-outlined" aria-hidden="true">group</span>
+          <p>Total usuarios</p>
+        </header>
+        <strong>{users.length}</strong>
+        <span className="admin-metric__trend admin-metric__trend--neutral">Registrados</span>
+      </article>
     </section>
     <section className="admin-card admin-card--table">
       <header className="admin-card__header">
         <div>
-          <p className="admin-card__title">Jugadores recientes</p>
-          <span>Últimas actividades en la plataforma</span>
+          <p className="admin-card__title">Jugadores registrados</p>
+          <span>Lista de usuarios en la plataforma</span>
         </div>
       </header>
       <div className="admin-table-wrapper">
@@ -538,7 +582,13 @@ const AdminUsersView = () => (
             </tr>
           </thead>
           <tbody>
-            {ADMIN_SAMPLE_USERS.map((user) => (
+            {isLoading && (
+              <tr><td colSpan={6}>Cargando usuarios...</td></tr>
+            )}
+            {!isLoading && users.length === 0 && (
+              <tr><td colSpan={6}>No hay usuarios registrados</td></tr>
+            )}
+            {users.map((user) => (
               <tr key={user.id}>
                 <td>{user.alias}</td>
                 <td>{user.email}</td>
@@ -557,11 +607,16 @@ const AdminUsersView = () => (
   </>
 );
 
-const AdminGamesView = () => (
+type AdminGamesViewProps = {
+  games: import("../../types").AdminGame[];
+  isLoading: boolean;
+};
+
+const AdminGamesView = ({ games, isLoading }: AdminGamesViewProps) => (
   <section className="admin-card admin-card--table">
     <header className="admin-card__header">
       <div>
-        <p className="admin-card__title">Salas activas</p>
+        <p className="admin-card__title">Salas de juego</p>
         <span>Monitorea partidas y su evolución</span>
       </div>
     </header>
@@ -580,7 +635,13 @@ const AdminGamesView = () => (
           </tr>
         </thead>
         <tbody>
-          {ADMIN_SAMPLE_GAMES.map((game) => (
+          {isLoading && (
+            <tr><td colSpan={8}>Cargando partidas...</td></tr>
+          )}
+          {!isLoading && games.length === 0 && (
+            <tr><td colSpan={8}>No hay partidas registradas</td></tr>
+          )}
+          {games.map((game) => (
             <tr key={game.id}>
               <td>{game.name}</td>
               <td>{game.host}</td>
@@ -591,9 +652,7 @@ const AdminGamesView = () => (
               </td>
               <td>{formatCredits(game.buyIn)}</td>
               <td>{formatCredits(game.pot)}</td>
-              <td>
-                {game.players}/{game.capacity}
-              </td>
+              <td>{game.players}/{game.capacity}</td>
             </tr>
           ))}
         </tbody>

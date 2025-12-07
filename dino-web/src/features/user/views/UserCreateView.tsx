@@ -42,7 +42,7 @@ export function UserCreateView({ me, onLogout, currentView, onNavigate }: UserCr
 
   return (
     <div className="user-create-shell">
-      <UserHeader view={currentView} balance={me.balance} onNavigate={onNavigate} onLogout={onLogout} />
+      <UserHeader view={currentView} balance={me.balance} userEmail={me.email} onNavigate={onNavigate} onLogout={onLogout} />
 
       <main className="user-create-main">
         <div className="user-create-content">

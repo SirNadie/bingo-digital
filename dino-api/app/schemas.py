@@ -92,6 +92,7 @@ class GameState(BaseModel):
     paid_diagonal: bool
     paid_line: bool
     paid_bingo: bool
+    creator_id: str
 
 
 class DrawResponse(BaseModel):
@@ -100,3 +101,34 @@ class DrawResponse(BaseModel):
     paid_line: bool
     paid_bingo: bool
     winners: List[WinnerOut]
+
+
+# --- Transacciones y Estadísticas ---
+TransactionTypeLiteral = Literal["deposit", "withdraw", "purchase", "prize", "refund"]
+
+
+class TransactionOut(BaseModel):
+    id: str
+    type: TransactionTypeLiteral
+    amount: float
+    description: str
+    reference_id: Optional[str] = None
+    created_at: str  # ISO format
+
+
+class TransactionListResponse(BaseModel):
+    transactions: List[TransactionOut]
+    total: int
+
+
+class UserStatsResponse(BaseModel):
+    games_played: int
+    games_won: int
+    win_rate: float  # percentage 0-100
+    total_earned: float  # prizes + deposits
+    total_spent: float  # purchases + withdrawals
+    net_balance: float
+    biggest_prize: float
+    bingos_won: int
+    lines_won: int
+    diagonals_won: int

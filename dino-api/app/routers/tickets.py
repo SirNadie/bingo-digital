@@ -10,6 +10,7 @@ from app.models.game import Game as GameModel
 from app.schemas import TicketCreate, TicketOut
 from app.models.wallet import Wallet
 from app.models.user import User
+from app.models.transaction import Transaction
 from app.services.bingo import generate_bingo_card
 
 
@@ -71,7 +72,17 @@ def buy_ticket_for_game(game_id: str, payload: TicketCreate, user_id: str = Depe
     if (game.sold_tickets >= game.min_tickets) and (not game.reached_min_at):
         from datetime import datetime
         game.reached_min_at = datetime.utcnow()
-    session.add_all([t, w, game])
+    
+    # Create transaction record for purchase
+    txn = Transaction(
+        user_id=user_id,
+        type="purchase",
+        amount=-price,
+        description=f"Compra de cartón · Partida #{game_id[:8]}",
+        reference_id=game_id,
+    )
+    
+    session.add_all([t, w, game, txn])
     session.commit()
     session.refresh(t)
     
@@ -146,7 +157,17 @@ def buy_auto_ticket(game_id: str, user_id: str = Depends(_auth), session: Sessio
     if (game.sold_tickets >= game.min_tickets) and (not game.reached_min_at):
         from datetime import datetime
         game.reached_min_at = datetime.utcnow()
-    session.add_all([t, w, game])
+    
+    # Create transaction record for purchase
+    txn = Transaction(
+        user_id=user_id,
+        type="purchase",
+        amount=-price,
+        description=f"Compra de cartón automático · Partida #{game_id[:8]}",
+        reference_id=game_id,
+    )
+    
+    session.add_all([t, w, game, txn])
     session.commit()
     session.refresh(t)
     

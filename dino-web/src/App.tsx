@@ -73,7 +73,6 @@ function AuthRoute({ children }: { children: React.ReactNode }) {
 // Main app routes
 function AppRoutes() {
   const { user, logout, refreshUser } = useAuth();
-  const ADMIN_SAMPLE_TRANSACTIONS: any[] = [];  // Placeholder for real data
 
   return (
     <Routes>
@@ -107,7 +106,7 @@ function AppRoutes() {
         element={
           <ProtectedRoute requireAdmin>
             <Suspense fallback={<LoadingSpinner />}>
-              {user && <AdminPanel me={user} onLogout={logout} transactions={ADMIN_SAMPLE_TRANSACTIONS} />}
+              {user && <AdminPanel me={user} onLogout={logout} />}
             </Suspense>
           </ProtectedRoute>
         }

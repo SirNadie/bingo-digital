@@ -22,6 +22,7 @@ export function UserGameRoomView({
   onNavigate,
 }: UserGameRoomViewProps) {
   const [lastDrawnNumber, setLastDrawnNumber] = useState<number | null>(null);
+  const [autoDrawEnabled, setAutoDrawEnabled] = useState(false);
 
   // API hooks
   const { data: gameState, refetch: refetchState } = useGameState(gameId);
@@ -79,10 +80,9 @@ export function UserGameRoomView({
   const bingoPrize = pot * 0.5556; // ~50% of total
 
   // Check if user is creator (can start/draw/cancel)
-  // Note: For now we check if user has tickets. Ideally GameState should include creator_id
-  const isCreator = true; // TODO: Get creator_id from game state. For now allow all for testing.
-  const canStart = gameState?.status === "OPEN" && (gameState?.sold_tickets || 0) >= (gameState?.min_tickets || 1);
-  const canCancel = gameState?.status === "OPEN" || gameState?.status === "READY";
+  const isCreator = gameState?.creator_id === me.id;
+  const canStart = isCreator && gameState?.status === "OPEN" && (gameState?.sold_tickets || 0) >= (gameState?.min_tickets || 1);
+  const canCancel = isCreator && (gameState?.status === "OPEN" || gameState?.status === "READY");
   const isRunning = gameState?.status === "RUNNING";
   const isFinished = gameState?.status === "FINISHED";
   const isCancelled = gameState?.status === "CANCELLED";
@@ -116,6 +116,32 @@ export function UserGameRoomView({
       });
     }
   };
+
+  const handleToggleAutoDraw = () => {
+    setAutoDrawEnabled(prev => !prev);
+  };
+
+  // Auto-draw logic: draw a number every 5 seconds when enabled
+  useEffect(() => {
+    if (!autoDrawEnabled || !isRunning || !isCreator || isFinished) {
+      return;
+    }
+
+    const interval = setInterval(() => {
+      if (!drawNumber.isPending) {
+        drawNumber.mutate(gameId);
+      }
+    }, 5000); // Draw every 5 seconds
+
+    return () => clearInterval(interval);
+  }, [autoDrawEnabled, isRunning, isCreator, isFinished, drawNumber, gameId]);
+
+  // Stop auto-draw when game ends
+  useEffect(() => {
+    if (isFinished || isCancelled) {
+      setAutoDrawEnabled(false);
+    }
+  }, [isFinished, isCancelled]);
 
   return (
     <div className="user-room-shell">
@@ -157,16 +183,28 @@ export function UserGameRoomView({
                 {startGame.isPending ? "Iniciando..." : "Iniciar partida"}
               </button>
             )}
-            {isRunning && (
-              <button
-                type="button"
-                className="user-room-button"
-                onClick={handleDrawNumber}
-                disabled={drawNumber.isPending}
-              >
-                <span className="material-symbols-outlined" aria-hidden="true">casino</span>
-                {drawNumber.isPending ? "Sorteando..." : "Sortear número"}
-              </button>
+            {isRunning && isCreator && (
+              <>
+                <button
+                  type="button"
+                  className="user-room-button"
+                  onClick={handleDrawNumber}
+                  disabled={drawNumber.isPending || autoDrawEnabled}
+                >
+                  <span className="material-symbols-outlined" aria-hidden="true">casino</span>
+                  {drawNumber.isPending ? "Sorteando..." : "Sortear número"}
+                </button>
+                <button
+                  type="button"
+                  className={`user-room-button ${autoDrawEnabled ? 'user-room-button--active' : 'user-room-button--secondary'}`}
+                  onClick={handleToggleAutoDraw}
+                >
+                  <span className="material-symbols-outlined" aria-hidden="true">
+                    {autoDrawEnabled ? 'pause' : 'play_arrow'}
+                  </span>
+                  {autoDrawEnabled ? "Pausar auto" : "Auto (5s)"}
+                </button>
+              </>
             )}
             {canCancel && isCreator && (
               <button
@@ -243,6 +281,9 @@ export function UserGameRoomView({
                       <span>ID: {ticket.id.slice(0, 6).toUpperCase()}</span>
                     </div>
                     <div className="user-room-card-body">
+                      <div className="user-room-card-header-row">
+                        <span>B</span><span>I</span><span>N</span><span>G</span><span>O</span>
+                      </div>
                       {ticket.numbers.map((row, rowIdx) => (
                         <div key={rowIdx} className="user-room-card-row">
                           {row.map((cell, cellIdx) => {
@@ -257,9 +298,7 @@ export function UserGameRoomView({
                                   isHit && !isFree ? "user-room-card-cell--hit" : "",
                                 ].filter(Boolean).join(" ")}
                               >
-                                {isFree ? (
-                                  <span className="material-symbols-outlined" aria-hidden="true">star</span>
-                                ) : cell}
+                                {isFree ? "LIBRE" : cell}
                               </div>
                             );
                           })}

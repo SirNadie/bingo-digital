@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import api from "../../api/http";
+import { useEffect, useState, useCallback } from "react";
+import api, { fetchTransactions } from "../../api/http";
 import toast from "react-hot-toast";
 import { formatCredits } from "../../utils/format";
 import {
@@ -7,9 +7,6 @@ import {
   UserTransaction,
   UserView,
 } from "../../types";
-import {
-  USER_SAMPLE_TRANSACTIONS,
-} from "./constants";
 import UserDashboardView from "./views/UserDashboardView";
 import UserStatsView from "./views/UserStatsView";
 import UserJoinView from "./views/UserJoinView";
@@ -24,25 +21,44 @@ type UserAppProps = {
 
 export function UserApp({ me, onLogout, onSessionRefresh }: UserAppProps) {
   const [view, setView] = useState<UserView>("balance");
-  const [transactions, setTransactions] = useState<UserTransaction[]>(USER_SAMPLE_TRANSACTIONS);
+  const [transactions, setTransactions] = useState<UserTransaction[]>([]);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [isTopupProcessing, setTopupProcessing] = useState(false);
+  const [isLoadingTransactions, setLoadingTransactions] = useState(true);
 
   // Game room state
   const [activeGameId, setActiveGameId] = useState<string | null>(null);
 
+  const loadTransactions = useCallback(async () => {
+    try {
+      setLoadingTransactions(true);
+      const data = await fetchTransactions({ limit: 50 });
+      // API response uses created_at, we map to timestamp
+      const mapped: UserTransaction[] = data.transactions.map((t: any) => ({
+        id: t.id,
+        timestamp: t.created_at,
+        type: t.type as UserTransaction["type"],
+        description: t.description,
+        amount: t.amount,
+      }));
+      setTransactions(mapped);
+    } catch (err) {
+      console.error("Error loading transactions:", err);
+      // Keep empty array on error
+      setTransactions([]);
+    } finally {
+      setLoadingTransactions(false);
+    }
+  }, []);
+
   useEffect(() => {
-    setTransactions(USER_SAMPLE_TRANSACTIONS);
+    loadTransactions();
     setView("balance");
     setMessage("");
     setError("");
     setActiveGameId(null);
-  }, [me.id]);
-
-  const pushTransaction = (txn: UserTransaction) => {
-    setTransactions((prev) => [txn, ...prev].slice(0, 50));
-  };
+  }, [me.id, loadTransactions]);
 
   const handleTopup = async (amount: number) => {
     setError("");
@@ -56,13 +72,8 @@ export function UserApp({ me, onLogout, onSessionRefresh }: UserAppProps) {
       const { data } = await api.post("/wallet/topup", { amount });
       toast.success(`Saldo actualizado: ${formatCredits(data.balance)}`);
       await onSessionRefresh();
-      pushTransaction({
-        id: `TXU-${Date.now()}`,
-        timestamp: new Date().toISOString(),
-        type: "deposit",
-        description: "Recarga manual de créditos",
-        amount,
-      });
+      // Reload transactions from backend
+      await loadTransactions();
     } catch (err: any) {
       toast.error(err?.response?.data?.detail || "Error al recargar");
     } finally {
@@ -72,13 +83,6 @@ export function UserApp({ me, onLogout, onSessionRefresh }: UserAppProps) {
 
   const handleWithdrawal = () => {
     toast("La solicitud de retiro estará disponible próximamente.");
-    pushTransaction({
-      id: `TXU-${Date.now()}-WD`,
-      timestamp: new Date().toISOString(),
-      type: "withdraw",
-      description: "Solicitud de retiro registrada",
-      amount: -50,
-    });
   };
 
   const handleEnterRoom = (gameId: string) => {
@@ -142,6 +146,7 @@ export function UserApp({ me, onLogout, onSessionRefresh }: UserAppProps) {
       error={error}
       currentView={view}
       onNavigate={setView}
+      onEnterRoom={handleEnterRoom}
     />
   );
 }
