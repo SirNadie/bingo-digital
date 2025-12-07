@@ -7,6 +7,7 @@ export const USER_SAMPLE_TRANSACTIONS: UserTransaction[] = [
     type: "deposit",
     description: "Depósito con tarjeta (final 4242)",
     amount: 500,
+    status: "approved",
   },
   {
     id: "TXU-002",
@@ -14,6 +15,7 @@ export const USER_SAMPLE_TRANSACTIONS: UserTransaction[] = [
     type: "purchase",
     description: "Compra de 5 cartones · Partida #AB12CD",
     amount: -50,
+    status: "approved",
   },
   {
     id: "TXU-003",
@@ -21,6 +23,7 @@ export const USER_SAMPLE_TRANSACTIONS: UserTransaction[] = [
     type: "prize",
     description: "Premio Bingo · Sala \"Noche Retro\"",
     amount: 150,
+    status: "approved",
   },
   {
     id: "TXU-004",
@@ -28,6 +31,7 @@ export const USER_SAMPLE_TRANSACTIONS: UserTransaction[] = [
     type: "withdraw",
     description: "Retiro a cuenta bancaria",
     amount: -200,
+    status: "approved",
   },
   {
     id: "TXU-005",
@@ -35,6 +39,7 @@ export const USER_SAMPLE_TRANSACTIONS: UserTransaction[] = [
     type: "purchase",
     description: "Compra de 10 cartones · Partida #XY98ZT",
     amount: -100,
+    status: "approved",
   },
 ];
 

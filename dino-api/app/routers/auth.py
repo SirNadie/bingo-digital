@@ -1,10 +1,11 @@
-from fastapi import APIRouter, Depends, HTTPException, Header
+from fastapi import APIRouter, Depends, HTTPException, Header, Request
 from sqlmodel import Session, select
 
 from app.schemas import LoginRequest, LoginResponse, MeResponse, UpdateProfileRequest
 from app.core.database import get_session
 from app.core.security import create_access_token, hash_password, verify_password, get_user_id_from_bearer
 from app.core.config import AUTO_REGISTER_ON_LOGIN
+from app.core.limiter import limiter
 from app.models.user import User
 from app.models.wallet import Wallet
 
@@ -13,7 +14,8 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 
 @router.post("/register", response_model=LoginResponse, status_code=201)
-def register(payload: LoginRequest, session: Session = Depends(get_session)):
+@limiter.limit("5/minute")
+def register(request: Request, payload: LoginRequest, session: Session = Depends(get_session)):
     # email único; crea usuario + wallet y devuelve token
     existing = session.exec(select(User).where(User.email == payload.email)).first()
     if existing:
@@ -76,7 +78,8 @@ def update_me(payload: UpdateProfileRequest, user_id: str = Depends(_auth), sess
 
 
 @router.post("/login", response_model=LoginResponse)
-def login(payload: LoginRequest, session: Session = Depends(get_session)):
+@limiter.limit("10/minute")
+def login(request: Request, payload: LoginRequest, session: Session = Depends(get_session)):
     u = session.exec(select(User).where(User.email == payload.email)).first()
     if not u:
         if AUTO_REGISTER_ON_LOGIN:

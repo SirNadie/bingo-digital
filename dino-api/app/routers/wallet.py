@@ -1,9 +1,10 @@
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from typing import Optional
 from sqlmodel import Session, select
 
 from app.core.database import get_session
 from app.core.security import get_user_id_from_bearer
+from app.core.limiter import limiter
 from app.models.wallet import Wallet
 from app.models.transaction import Transaction
 from app.schemas import TopUpRequest, TopUpResponse
@@ -20,7 +21,8 @@ def _auth(bearer: Optional[str] = Header(None, alias="Authorization")) -> str:
 
 
 @router.post("/topup", response_model=TopUpResponse)
-def topup(payload: TopUpRequest, user_id: str = Depends(_auth), session: Session = Depends(get_session)):
+@limiter.limit("10/minute")
+def topup(request: Request, payload: TopUpRequest, user_id: str = Depends(_auth), session: Session = Depends(get_session)):
     w = session.exec(select(Wallet).where(Wallet.user_id == user_id)).first()
     if not w:
         # crear si no existe
@@ -28,8 +30,7 @@ def topup(payload: TopUpRequest, user_id: str = Depends(_auth), session: Session
         session.add(w)
         session.commit()
         session.refresh(w)
-    # w.balance = float(w.balance or 0.0) + float(payload.amount)
-    # session.add(w)
+
     
     # Create transaction record as PENDING
     txn = Transaction(
@@ -52,7 +53,8 @@ class WithdrawRequest(TopUpRequest):
 
 
 @router.post("/withdraw", response_model=TopUpResponse)
-def withdraw(payload: WithdrawRequest, user_id: str = Depends(_auth), session: Session = Depends(get_session)):
+@limiter.limit("10/minute")
+def withdraw(request: Request, payload: WithdrawRequest, user_id: str = Depends(_auth), session: Session = Depends(get_session)):
     w = session.exec(select(Wallet).where(Wallet.user_id == user_id)).first()
     if not w:
         raise HTTPException(status_code=404, detail="Billetera no encontrada")

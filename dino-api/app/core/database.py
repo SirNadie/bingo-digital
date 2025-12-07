@@ -8,6 +8,17 @@ DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./dino.db")
 _connect_args = {"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {}
 engine = create_engine(DATABASE_URL, echo=False, connect_args=_connect_args)
 
+# Enable WAL Mode for SQLite (better concurrency)
+if DATABASE_URL.startswith("sqlite"):
+    from sqlalchemy import event
+    
+    @event.listens_for(engine, "connect")
+    def set_sqlite_pragma(dbapi_connection, connection_record):
+        cursor = dbapi_connection.cursor()
+        cursor.execute("PRAGMA journal_mode=WAL")
+        cursor.execute("PRAGMA synchronous=NORMAL")
+        cursor.close()
+
 def init_db():
     # Ensure models are imported so SQLModel metadata is populated
     import app.models  # noqa: F401
