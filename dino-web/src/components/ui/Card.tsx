@@ -1,16 +1,10 @@
-import { motion, HTMLMotionProps } from 'framer-motion';
-import { clsx, type ClassValue } from 'clsx';
-import { twMerge } from 'tailwind-merge';
+import { motion } from 'framer-motion';
+import { cn } from '../../utils/cn';
 import React from 'react';
 
-function cn(...inputs: ClassValue[]) {
-    return twMerge(clsx(inputs));
-}
-
-export interface CardProps extends HTMLMotionProps<"div"> {
+type CardProps = React.ComponentProps<typeof motion.div> & {
     variant?: 'default' | 'glass' | 'neo';
-    children?: React.ReactNode;
-}
+};
 
 export function Card({ className, variant = 'glass', children, ...props }: CardProps) {
     const variants = {
@@ -27,7 +21,6 @@ export function Card({ className, variant = 'glass', children, ...props }: CardP
             className={cn("rounded-2xl p-6 relative overflow-hidden", variants[variant], className)}
             {...props}
         >
-            {/* Glow effect for glass cards */}
             {variant === 'glass' && (
                 <div className="absolute -top-32 -right-32 w-64 h-64 bg-primary/10 rounded-full blur-3xl pointer-events-none" />
             )}

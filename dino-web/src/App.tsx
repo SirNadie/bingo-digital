@@ -1,88 +1,135 @@
-import { useCallback, useEffect, useState } from "react";
+import { lazy, Suspense } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import api from "./api/http";
-import LoginView from "./features/auth/LoginView";
-import UserApp from "./features/user/UserApp";
-import AdminPanel from "./features/admin/AdminPanel";
-import { ADMIN_SAMPLE_TRANSACTIONS } from "./features/admin/constants";
-import { Me } from "./types";
-import { ProtectedRoute } from "./components/auth/ProtectedRoute";
-import { Layout } from "./components/layout/Layout";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { AuthProvider, useAuth } from "./context/AuthContext";
+import { ErrorBoundary } from "./components/ErrorBoundary";
+import { ToastProvider } from "./components/ToastProvider";
 
-export default function App() {
-  const [me, setMe] = useState<Me | null>(null);
-  const [isFetchingMe, setIsFetchingMe] = useState(true);
+// Lazy loaded components
+const LoginView = lazy(() => import("./features/auth/LoginView"));
+const UserApp = lazy(() => import("./features/user/UserApp"));
+const AdminPanel = lazy(() => import("./features/admin/AdminPanel"));
 
-  const fetchMe = useCallback(async (): Promise<Me | null> => {
-    try {
-      const { data } = await api.get("/auth/me");
-      const profile: Me = {
-        id: data.id,
-        email: data.email,
-        balance: data.balance,
-        alias: data.alias,
-        is_admin: data.is_admin,
-        is_verified: data.is_verified,
-      };
-      setMe(profile);
-      return profile;
-    } catch (error) {
-      localStorage.removeItem("token");
-      setMe(null);
-      return null;
-    } finally {
-      setIsFetchingMe(false);
-    }
-  }, []);
+// React Query client
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 1000 * 60 * 5, // 5 minutes
+      retry: 1,
+    },
+  },
+});
 
-  useEffect(() => {
-    fetchMe();
-  }, [fetchMe]);
-
-  const logout = useCallback(() => {
-    localStorage.removeItem("token");
-    setMe(null);
-    window.location.href = "/auth";
-  }, []);
-
-  if (isFetchingMe) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="flex flex-col items-center gap-4">
-          <div className="w-12 h-12 border-4 border-primary/30 border-t-primary rounded-full animate-spin" />
-          <p className="text-white/60 font-display animate-pulse">Iniciando sistema...</p>
-        </div>
+// Loading spinner component
+function LoadingSpinner() {
+  return (
+    <div className="min-h-screen bg-background flex items-center justify-center">
+      <div className="flex flex-col items-center gap-4">
+        <div className="w-12 h-12 border-4 border-primary/30 border-t-primary rounded-full animate-spin" />
+        <p className="text-white/60 font-display animate-pulse">Cargando...</p>
       </div>
-    );
+    </div>
+  );
+}
+
+// Protected route component
+function ProtectedRoute({ children, requireAdmin = false }: { children: React.ReactNode; requireAdmin?: boolean }) {
+  const { user, isLoading, isAuthenticated } = useAuth();
+
+  if (isLoading) {
+    return <LoadingSpinner />;
   }
 
+  if (!isAuthenticated) {
+    return <Navigate to="/auth" replace />;
+  }
+
+  if (requireAdmin && !user?.is_admin) {
+    return <Navigate to="/" replace />;
+  }
+
+  if (!requireAdmin && user?.is_admin) {
+    return <Navigate to="/admin" replace />;
+  }
+
+  return <>{children}</>;
+}
+
+// Auth route - redirects if already logged in
+function AuthRoute({ children }: { children: React.ReactNode }) {
+  const { user, isLoading, isAuthenticated } = useAuth();
+
+  if (isLoading) {
+    return <LoadingSpinner />;
+  }
+
+  if (isAuthenticated) {
+    return <Navigate to={user?.is_admin ? "/admin" : "/"} replace />;
+  }
+
+  return <>{children}</>;
+}
+
+// Main app routes
+function AppRoutes() {
+  const { user, logout, refreshUser } = useAuth();
+  const ADMIN_SAMPLE_TRANSACTIONS: any[] = [];  // Placeholder for real data
+
   return (
-    <BrowserRouter>
-      <Routes>
-        {/* Public Route */}
-        <Route path="/auth" element={
-          !me ? <LoginView onLoginSuccess={fetchMe} /> : <Navigate to={me.is_admin ? "/admin" : "/"} replace />
-        } />
+    <Routes>
+      {/* Public Route */}
+      <Route
+        path="/auth"
+        element={
+          <AuthRoute>
+            <Suspense fallback={<LoadingSpinner />}>
+              <LoginView />
+            </Suspense>
+          </AuthRoute>
+        }
+      />
 
-        {/* User Routes */}
-        <Route element={<ProtectedRoute user={me} allowedRoles={['user']} />}>
-          <Route path="/" element={
-            me && <Layout user={me} onLogout={logout}>
-              <UserApp me={me} onLogout={logout} onSessionRefresh={fetchMe} />
-            </Layout>
-          } />
-        </Route>
+      {/* User Routes */}
+      <Route
+        path="/"
+        element={
+          <ProtectedRoute>
+            <Suspense fallback={<LoadingSpinner />}>
+              {user && <UserApp me={user} onLogout={logout} onSessionRefresh={refreshUser} />}
+            </Suspense>
+          </ProtectedRoute>
+        }
+      />
 
-        {/* Admin Routes */}
-        <Route element={<ProtectedRoute user={me} allowedRoles={['admin']} />}>
-          <Route path="/admin" element={
-            me && <AdminPanel me={me} onLogout={logout} transactions={ADMIN_SAMPLE_TRANSACTIONS} />
-          } />
-        </Route>
+      {/* Admin Routes */}
+      <Route
+        path="/admin"
+        element={
+          <ProtectedRoute requireAdmin>
+            <Suspense fallback={<LoadingSpinner />}>
+              {user && <AdminPanel me={user} onLogout={logout} transactions={ADMIN_SAMPLE_TRANSACTIONS} />}
+            </Suspense>
+          </ProtectedRoute>
+        }
+      />
 
-        {/* Catch all */}
-        <Route path="*" element={<Navigate to={me ? "/" : "/auth"} replace />} />
-      </Routes>
-    </BrowserRouter>
+      {/* Catch all */}
+      <Route path="*" element={<Navigate to="/auth" replace />} />
+    </Routes>
+  );
+}
+
+export default function App() {
+  return (
+    <ErrorBoundary>
+      <QueryClientProvider client={queryClient}>
+        <AuthProvider>
+          <BrowserRouter>
+            <ToastProvider />
+            <AppRoutes />
+          </BrowserRouter>
+        </AuthProvider>
+      </QueryClientProvider>
+    </ErrorBoundary>
   );
 }

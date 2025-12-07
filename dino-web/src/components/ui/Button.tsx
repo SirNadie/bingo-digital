@@ -1,10 +1,5 @@
 import { motion, HTMLMotionProps } from 'framer-motion';
-import { clsx, type ClassValue } from 'clsx';
-import { twMerge } from 'tailwind-merge';
-
-function cn(...inputs: ClassValue[]) {
-    return twMerge(clsx(inputs));
-}
+import { cn } from '../../utils/cn';
 
 interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
     variant?: 'primary' | 'secondary' | 'ghost' | 'glow';
@@ -18,6 +13,7 @@ export function Button({
     size = 'md',
     isLoading,
     children,
+    disabled,
     ...props
 }: ButtonProps) {
     const baseStyles = "relative inline-flex items-center justify-center font-display font-semibold transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl";
@@ -35,7 +31,6 @@ export function Button({
         lg: "px-8 py-4 text-lg",
     };
 
-    // Convert generic props to motion props for animation
     const MotionButton = motion.button;
 
     return (
@@ -43,8 +38,8 @@ export function Button({
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
             className={cn(baseStyles, variants[variant], sizes[size], className)}
-            disabled={isLoading || props.disabled}
-            {...(props as HTMLMotionProps<"button">)}
+            disabled={isLoading || disabled}
+            {...(props as any)}
         >
             {isLoading ? (
                 <span className="flex items-center gap-2">

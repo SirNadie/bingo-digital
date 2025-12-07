@@ -1,48 +1,57 @@
 import { useState } from "react";
-import api from "../../api/http";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import toast from "react-hot-toast";
+import { useAuth } from "../../context/AuthContext";
 import { Button } from "../../components/ui/Button";
 import { Input } from "../../components/ui/Input";
 import { Card } from "../../components/ui/Card";
 import { Mail, Lock, User, ArrowRight } from "lucide-react";
 import { motion } from "framer-motion";
+import { loginSchema, registerSchema, LoginFormData, RegisterFormData } from "../../utils/validations";
 
-interface LoginViewProps {
-  onLoginSuccess: () => void;
-}
-
-export default function LoginView({ onLoginSuccess }: LoginViewProps) {
+export default function LoginView() {
+  const { login, register: registerUser } = useAuth();
   const [isRegistering, setIsRegistering] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState("");
 
-  // Form State
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [alias, setAlias] = useState("");
+  const loginForm = useForm<LoginFormData>({
+    resolver: zodResolver(loginSchema),
+    defaultValues: { email: "", password: "" },
+  });
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError("");
+  const registerForm = useForm<RegisterFormData>({
+    resolver: zodResolver(registerSchema),
+    defaultValues: { alias: "", email: "", password: "" },
+  });
+
+  const currentForm = isRegistering ? registerForm : loginForm;
+
+  const handleSubmit = async (data: LoginFormData | RegisterFormData) => {
     setIsLoading(true);
 
     try {
       if (isRegistering) {
-        await api.post("/auth/register", { email, password, alias });
-        // Auto login after register
-      }
-
-      const res = await api.post("/auth/login", { email, password });
-      localStorage.setItem("token", res.data.access_token);
-      onLoginSuccess();
-    } catch (err: any) {
-      if (err.response?.data?.detail) {
-        setError(typeof err.response.data.detail === 'string' ? err.response.data.detail : "Error en la solicitud");
+        const regData = data as RegisterFormData;
+        await registerUser(regData.email, regData.password, regData.alias);
+        toast.success("¡Cuenta creada exitosamente!");
       } else {
-        setError("No se pudo conectar con el servidor");
+        const loginData = data as LoginFormData;
+        await login(loginData.email, loginData.password);
+        toast.success("¡Bienvenido de vuelta!");
       }
+    } catch (err: any) {
+      const message = err.response?.data?.detail;
+      toast.error(typeof message === 'string' ? message : "Error al procesar la solicitud");
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const toggleMode = () => {
+    loginForm.reset();
+    registerForm.reset();
+    setIsRegistering(!isRegistering);
   };
 
   return (
@@ -69,14 +78,13 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
           </motion.div>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-6">
+        <form onSubmit={currentForm.handleSubmit(handleSubmit)} className="space-y-5">
           {isRegistering && (
             <Input
               placeholder="Tu Alias (p.ej. Rex)"
               icon={<User className="w-5 h-5" />}
-              value={alias}
-              onChange={(e) => setAlias(e.target.value)}
-              required={isRegistering}
+              error={registerForm.formState.errors.alias?.message}
+              {...registerForm.register("alias")}
             />
           )}
 
@@ -84,25 +92,21 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
             type="email"
             placeholder="correo@ejemplo.com"
             icon={<Mail className="w-5 h-5" />}
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
+            error={isRegistering
+              ? registerForm.formState.errors.email?.message
+              : loginForm.formState.errors.email?.message}
+            {...currentForm.register("email")}
           />
 
           <Input
             type="password"
             placeholder="••••••••"
             icon={<Lock className="w-5 h-5" />}
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
+            error={isRegistering
+              ? registerForm.formState.errors.password?.message
+              : loginForm.formState.errors.password?.message}
+            {...currentForm.register("password")}
           />
-
-          {error && (
-            <div className="p-3 bg-error/10 border border-error/20 rounded-lg text-error text-sm text-center">
-              {error}
-            </div>
-          )}
 
           <Button type="submit" variant="primary" className="w-full group" isLoading={isLoading}>
             {isRegistering ? "Crear Cuenta" : "Iniciar Sesión"}
@@ -113,7 +117,7 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
         <div className="mt-6 text-center">
           <button
             type="button"
-            onClick={() => { setError(""); setIsRegistering(!isRegistering); }}
+            onClick={toggleMode}
             className="text-sm text-white/50 hover:text-primary transition-colors hover:underline underline-offset-4"
           >
             {isRegistering ? "¿Ya tienes cuenta? Inicia sesión" : "¿Nuevo aquí? Crea una cuenta gratis"}

@@ -1,10 +1,5 @@
-import { clsx, type ClassValue } from 'clsx';
-import { twMerge } from 'tailwind-merge';
+import { cn } from '../../utils/cn';
 import { forwardRef } from 'react';
-
-function cn(...inputs: ClassValue[]) {
-    return twMerge(clsx(inputs));
-}
 
 interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
     label?: string;
